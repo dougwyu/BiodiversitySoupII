@@ -5,7 +5,8 @@ See Wiki page for assumed folder structure.
 **This pipeline is designed for my laboratory to use, so clone and employ in your environment with care!**
 
 1_SoupII_software_install_on_macos_20191010.sh  
-This pipeline is tested for macOS and processes Illumina HiSeq/MiSeq files for metabarcoding. Software installation information is in this script.
+
+This pipeline is tested for macOS and processes Illumina HiSeq/MiSeq files for metabarcoding. Software installation information is in this script.  
 
 2_SoupII_fastp_to_Begum_Metabarcoding_pipeline.sh  
 1. Create merged reads using fastp (Chen et al. 2018)  
