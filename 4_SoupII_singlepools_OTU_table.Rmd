@@ -369,12 +369,14 @@ for (i in pairwiseAB_difftags) {
 correlationsAB_sametags
 (n1 <- length(correlationsAB_sametags))
 (m1 <- mean(correlationsAB_sametags))
-(s1 <- sd(correlationsAB_sametags)/sqrt(length(correlationsAB_sametags)))
+(s1 <- sd(correlationsAB_sametags))
+# (s1 <- sd(correlationsAB_sametags)/sqrt(length(correlationsAB_sametags)))
 
 correlationsAB_difftags
 (n2 <- length(correlationsAB_difftags))
 (m2 <- mean(correlationsAB_difftags))
-(s2 <- sd(correlationsAB_difftags)/sqrt(length(correlationsAB_difftags)))
+(s2 <- sd(correlationsAB_difftags))
+# (s2 <- sd(correlationsAB_difftags)/sqrt(length(correlationsAB_difftags)))
 
 (ABsinglepoolstest <- t.test2(m1, m2, s1, s2, n1, n2))
 ```
@@ -444,12 +446,12 @@ for (i in pairwiseCD_difftags) {
 correlationsCD_sametags
 (n1 <- length(correlationsCD_sametags))
 (m1 <- mean(correlationsCD_sametags))
-(s1 <- sd(correlationsCD_sametags)/sqrt(length(correlationsCD_sametags)))
+(s1 <- sd(correlationsCD_sametags))
 
 correlationsCD_difftags
 (n1 <- length(correlationsCD_difftags))
 (m2 <- mean(correlationsCD_difftags))
-(s2 <- sd(correlationsCD_difftags)/sqrt(length(correlationsCD_difftags)))
+(s2 <- sd(correlationsCD_difftags))
 
 (CDsinglepoolstest <- t.test2(m1, m2, s1, s2, n1, n2))
 ```
@@ -521,12 +523,12 @@ for (i in pairwiseGH_difftags) {
 correlationsGH_sametags
 (n1 <- length(correlationsGH_sametags))
 (m1 <- mean(correlationsGH_sametags))
-(s1 <- sd(correlationsGH_sametags)/sqrt(length(correlationsGH_sametags)))
+(s1 <- sd(correlationsGH_sametags))
 
 correlationsGH_difftags
 (n2 <- length(correlationsGH_difftags))
 (m2 <- mean(correlationsGH_difftags))
-(s2 <- sd(correlationsGH_difftags)/sqrt(length(correlationsGH_difftags)))
+(s2 <- sd(correlationsGH_difftags))
 
 (GHsinglepoolstest <- t.test2(m1, m2, s1, s2, n1, n2))
 ```
