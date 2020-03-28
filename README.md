@@ -2,13 +2,14 @@
 
 See Wiki page for assumed folder structure.  
 
-**This pipeline is designed for my laboratory to use, so clone and employ in your environment with care!**
+**These are the scripts used in our Biodiversity Soup II manuscript.**
 
-1_SoupII_software_install_on_macos_20191010.sh  
+**1_SoupII_software_install_on_macos_20191010.sh**  
 
 This pipeline is tested for macOS and processes Illumina HiSeq/MiSeq files for metabarcoding. Software installation information is in this script.  
 
-2_SoupII_fastp_to_Begum_Metabarcoding_pipeline.sh  
+**2_SoupII_fastp_to_Begum_Metabarcoding_pipeline.sh**  
+
 1. Create merged reads using fastp (Chen et al. 2018)  
 
 2. Demultiplex, Filter, and Cluster the merged reads using the Begum pipeline, which is a rewrite of the DAMe pipeline (Zepeda-Mendoza et al. 2016, BMC Research Notes) (http://github.com/shyamsg/Begum)  
@@ -19,14 +20,16 @@ d)  vsearch clustering and OTU table creation
 e)  vsearch --sintax taxonomic assignment on the MIDORI COI database  
 f)  Filter OTU tables and OTU representative sequences fasta by taxonomy (keeping Arthropoda ≥ 0.80 probability)  
 
-3_SoupII_ecological_analysis.Rmd  
+**3_SoupII_ecological_analysis.Rmd**  
+
 1. Community analysis  
 a) filter out artefactually small OTUs via phyloseq method (https://github.com/joey711/phyloseq)  
 b) NMDS ordination to view results  
 c) estimate proportion of OTUs that are missing (drop-outs) and are erroneous (false-positives, drop-ins) as a function of Begum filtering, PCR condition, and taxonomy  
 d) analyse whether OTU size contains abundance information    
 
-4_SoupII_singlepools_OTU_table.Rmd   
+**4_SoupII_singlepools_OTU_table.Rmd**   
+
 1. Tag-bias analysis  
 a) Exploit the replicate PCRs using same and different tags and compare for differences in community composition  
 
