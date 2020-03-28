@@ -73,11 +73,11 @@ cd ~/src
 git clone https://github.com/shyamsg/Begum.git
 # no building needed because these are python2 scripts
 
-# Install DAMe
+# Install DAMe, using for one function: convertToUSearch.py
 cd ~/Desktop
-git clone https://github.com/shyamsg/DAMe.git # can read tags with heterogeneity spacers
+git clone https://github.com/shyamsg/DAMe.git
 mv ~/Desktop/DAMe /usr/local/bin # on ubuntu will need sudo mv
-# no building needed
+# no building needed because these are python3 scripts
 
 
 # The following GUI programs are installed in your Applications folder
@@ -99,9 +99,17 @@ mv ~/Desktop/DAMe /usr/local/bin # on ubuntu will need sudo mv
 # Install RStudio:  GUI to R
 # download binary from https://rstudio.org
 
+# Download MIDORI reference file from:  http://www.reference-midori.info/download.php#
+# navigate here and download:
+    # /20180221/MIDORI_UNIQUE_20180221/SINTAX_format/MIDORI_UNIQUE_20180221_COI_SINTAX.fasta.zip');
+
 # Install R packages within R:  additional functionality in R
 # Launch RStudio and run these commands in R. This step can take hours the first time
-install.packages(c("tidyverse", "data.table", "vegan", "car", "RColorBrewer", "devtools", "BiocManager", "metacoder"), dependencies = TRUE)
+install.packages(c("vegan", "car", "data.table", "here", "tidyverse", "readxl", "cowplot", "lubridate", "patchwork", "sjmisc", "broom", "lme4", "MuMin", "ggeasy", "RColorBrewer", "envDocument", "conflicted","BiocManager", dependencies = TRUE))
+
+remotes::install_github("grunwaldlab/metacoder")
+
 library(BiocManager)
-BiocManager::install(c("GenomicRanges", "Biobase", "IRanges", "AnnotationDbi", "dada2", "phyloseq")) # install Bioconductor packages
+BiocManager::install(c("GenomicRanges", "Biobase", "IRanges", "AnnotationDbi", "phyloseq")) # install Bioconductor packages
+
 BiocManager::valid() # identify packages that are out of date or unexpected versions. Creates a command for updating out of date bioconductor packages
