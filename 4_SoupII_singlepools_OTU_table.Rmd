@@ -1,0 +1,534 @@
+This script is applied to the singlepools and does three things
+1) It imports the singlepool OTU tables.  
+2) Then it carries out a phyloseq analysis of OTU sizes to choose a minimum OTU size, and filters out the smaller OTUs. The missing sample in H1 is removed from the dataset.
+3) Finally, it calculates NMDS ordinations and ordination plots for all singlepools. 
+
+```{r setup chunk, message=FALSE}
+# copy the following into each script   
+knitr::opts_chunk$set(
+	message = FALSE,
+	warning = FALSE,
+	include = FALSE
+)
+
+# script-specific libraries
+library(vegan)
+library(car)
+library(phyloseq)
+library(data.table)
+library(RColorBrewer) # for colours
+
+# general-use packages
+library(here)
+library(tidyverse) 
+library(readxl)
+library(cowplot)
+library(lubridate)
+library(patchwork)
+# library(sessioninfo)
+library(arsenal) # for summary(comparedf())
+library(sjmisc) # for rotate_df()
+library(envDocument)
+library(conflicted)
+  conflict_prefer("mutate", "dplyr", quiet = TRUE)
+  conflict_prefer("select", "dplyr", quiet = TRUE)
+  conflict_prefer("summarise", "dplyr", quiet = TRUE)
+  conflict_prefer("filter", "dplyr", quiet = TRUE)
+  conflict_prefer("first", "dplyr", quiet = TRUE)
+  conflict_prefer("here", "here", quiet = TRUE)
+  conflict_prefer("separate", "tidyr", quiet = TRUE)
+  conflict_prefer("unite", "tidyr", quiet = TRUE)
+  conflict_prefer("intersect", "dplyr", quiet = TRUE)
+  conflict_prefer("year", "lubridate", quiet = TRUE)
+  conflict_prefer("setdiff", "dplyr", quiet = TRUE) # w/out this, R crashes
+  
+env_doc("table", git = FALSE)
+# sessionInfo() # base R method
+# sessioninfo::session_info() # package sessioninfo method
+
+# Provide real numbers, not scientific notation.
+options(scipen = 999)
+
+# rm(list=ls())
+```
+
+Import singlepool OTU tables. These tables include all OTUs, not just Arthropoda-assigned OTUs. 
+```{r import singlepool tables}
+splfiles <- "table_BioSoupII_97_\\w\\d_SnglPl\\.txt"
+spl_files <- list.files(Sys.glob(file.path("..", "analysis", "singlepools")), pattern = splfiles, full.names = TRUE)
+    # list.files is used to look for files matching "table_BioSoupII_97_\\w\\d_SnglPl\\.txt"
+    # full.names = TRUE returns the pathnames
+    # \\ is used to escape \ and . (because otherwise they are read with grep as "ignore" and "any character". R needs a second \)
+head(spl_files); cat("    ", length(spl_files), "total files")
+
+# column names of spl files
+spl_cols <- c("OTU_ID","Hhmlbody","Hhmlleg","hhhlbody","hhhlleg","hlllbody","hlllleg","mmmmbody","mmmmleg")
+
+# function to read_tsv the files
+readsnglpools <- function(x) {
+    df <- read_tsv(x, na = "NA") 
+    df
+}
+spl <- map(spl_files, readsnglpools)
+
+# name dfs in spl list
+folderpoolvec <- sub("table_BioSoupII_97_(\\w\\d)_SnglPl\\.txt", "\\1", basename(spl_files), perl=TRUE)
+names(spl) <- folderpoolvec
+
+# individual singlepools can be referred to as spl$folderpool: spl$A1
+```
+
+phyloseq filtering by OTU size. This step removes "small" OTUs, which are probably artefacts of PCR and sequencing error, i.e. echo OTUs, which should have been clustered into the legitimate OTUs. What is "small"?  It is a bit subjective, but the phyloseq method helps us make a judgement. Phyloseq creates a rarefaction curve, showing how many OTUs would be removed at each minimum OTU size. A minimum OTU size is set at the tangent to this curve. See the graphs created below to understand this.
+
+Strategy:  survey a sample of OTU tables to decide on a common min OTU size. Then apply a function to all OTU tables in the spl list.
+```{r phyloseq analysis, eval=FALSE}
+# choose a table
+communityAll_t <- spl$H3
+
+# Inspect the control sample (PC, PCR, xb) OTUs and filter the OTU table.  
+communityAll_t <- communityAll_t %>% arrange(desc(PC))
+# View(communityAll_t)
+communityAll_t <- communityAll_t %>% select(-starts_with("PC"), -starts_with("xb"))
+
+# Transpose to make canonical OTU tables (sample X OTU format) for community analysis
+communityAll <- rotate_df(communityAll_t, cn = TRUE)
+# OTU sizes are the colSums (not the number of reads within each cell)
+# colSums(communityAll)
+
+# phyloseq code
+TotalCounts <- c(colSums(communityAll))
+tdt = data.table(OTUs = colnames(communityAll), TotalCounts = colSums(communityAll), OTU = colnames(communityAll))
+taxcumsum = tdt[, .N, by = TotalCounts]
+setkey(taxcumsum, TotalCounts)
+taxcumsum[, CumSum := cumsum(N)]
+# Define the plot
+(pCumSum = ggplot(taxcumsum, aes(TotalCounts, CumSum)) + 
+  geom_point() + 
+  xlab("Filtering Threshold:  Minimum Read Number per OTU") +
+  ylab("OTUs That Would Be Filtered Out") +
+  ggtitle("Number of OTUs that would be filtered out at different minimum OTU size thresholds") + 
+    scale_x_continuous(breaks = scales::pretty_breaks(n = 25), limits = c(0, 100)) +
+    scale_y_continuous(breaks = scales::pretty_breaks(n = 25)))
+```
+
+I look to see if the curve starts with a near-vertical rise, which indicates a large number of very small OTUs. After viewing multiple OTU tables, I have set the min OTU size threshold to be 9, which is roughly the x-intercept of the tangent to the curve in the limits=c(0,100) plot. For instance, in spl$B1, setting threshold_otu_size==9 means that 1100 OTUs are removed, which is most of them. 
+```{r filter OTU tables for minimum OTU size and to set cells==1 to 0}
+threshold_otu_size <- 9
+
+minOTUsizefilter <- function(df){
+    df <- df %>% select(-starts_with("PC"), -starts_with("xb")) # tidyverse
+    df <- rotate_df(df, cn = TRUE) # sjmisc
+    df <- df[, colSums(df) >= threshold_otu_size] # base R
+    df[df == 1] <- 0 # base R
+    df
+}
+
+splminOTU <- map(spl, minOTUsizefilter)
+
+# splminOTU <- minOTUsizefilter(spl$A1)
+# View(splminOTU)
+# rm(splminOTU)
+```
+
+Check that all samples (rows) still have sufficient numbers of reads in them.  This isn't a risk with this dataset, but some datasets have samples with few, low-read-number OTUs. Removing small OTUs will sometimes produce samples (rows) that have almost no data, because that sample failed during PCR or DNA extraction. 
+```{r}
+tablerowsums <- map_dfr(splminOTU, rowSums)
+# View(tablerowsums)
+```
+
+In PCR H1, we find that the hhhlbody sample has no reads after filtering, which is probably because the PCR failed. Thus, the h1/hhhlbody results will overestimate dropout. 
+
+For ordinations, we need to remove H1:hhhlbody
+```{r remove hhhlbody from H1}
+splminOTU[["H1"]] <- splminOTU[["H1"]] %>% 
+    rownames_to_column() %>% 
+    filter(rowname != "hhhlbody") %>% 
+    column_to_rownames()
+```
+
+
+Plot NMDS of every singlepool
+```{r ordinations and plot ordinations}
+(colorvec <- c("#EF8A62", "#67A9CF"))  # from:  brewer.pal(3,"RdBu")
+
+extract_env <- function(x){
+    ## extract env variables
+    env <- x %>%
+        rownames_to_column() %>% 
+        select(sample = rowname) %>% 
+        mutate(
+            bodypart = case_when(
+                grepl("body", sample) == TRUE ~ "body",
+                grepl("leg", sample) == TRUE ~ "leg"
+            )
+        ) %>%
+        mutate(
+            bodypartcolor = if_else(bodypart == "body", 1, 2)
+        ) %>% 
+        mutate(
+            evenness = str_remove(sample, c("body|leg"))
+        )
+    env$sprichness <- specnumber(x, MARGIN = 1)
+    env
+}
+ordination <- function(x){
+    df <- metaMDS(x, distance = "bray", trymax = 40, binary=FALSE)
+    df
+}
+ordinationplot <- function(x, y, z){
+  xlim <- c(-1.5, 1.0) 
+  ylim <- c(-1.0, 1) 
+  plot(x, ylab="", xlab="", xlim=xlim, ylim=ylim, type="n", main=y) 
+   
+  points(x, display = "sites", pch=16, cex=(z$sprichness/40), col=colorvec)
+  
+  with(z, legend("top", legend = unique(bodypart), bty = "n", col=colorvec, pt.cex=2, pch=16))
+  
+  cexnum <- 0.5
+  
+  with(z, ordispider(x, evenness, cex=cexnum, col=c("black"), label=TRUE, show.groups=(c("hlll"))))
+  with(z, ordispider(x, evenness, cex=cexnum, col=c("black"), label=TRUE, show.groups=(c("Hhml"))))
+  with(z, ordispider(x, evenness, cex=cexnum, col=c("black"), label=TRUE, show.groups=(c("hhhl"))))
+  with(z, ordispider(x, evenness, cex=cexnum, col=c("black"), label=TRUE, show.groups=(c("mmmm"))))
+}
+
+splminOTU_all <- splminOTU
+
+# optional: plot stressplots
+stressplotfxn <- function(x){
+    stressplot(x)
+}
+par(mfrow=c(2,3))
+ordinations <- map(splminOTU_all, ordination)
+map(ordinations, stressplotfxn)
+par(mfrow=c(1,1))
+
+
+# ordinations and ordination plots for A,B,C,D,G
+splminOTU_ABCDG <- splminOTU_all[c(1:12,19:21)]
+# extract env data
+envs <- map(splminOTU_ABCDG, extract_env)
+# run metaMDS
+ordinations <- map(splminOTU_ABCDG, ordination)
+# extract names of the jmds elements
+plottitle <- names(ordinations)
+# plot ordinations, with jmds names as plot titles
+par(mfrow=c(2,3))
+pmap(list(ordinations, plottitle, envs), ordinationplot)
+
+# now plot H1
+extract_env_H1 <- function(x){
+    ## extract env variables
+    env <- x %>%
+        rownames_to_column() %>% 
+        select(sample = rowname) %>% 
+        mutate(
+            bodypart = case_when(
+                grepl("body", sample) == TRUE ~ "body",
+                grepl("leg", sample) == TRUE ~ "leg"
+            )
+        ) %>%
+        mutate(
+            bodypartcolor = if_else(bodypart == "body", 1, 2)
+        ) %>% 
+        mutate(
+            evenness = str_remove(sample, c("body|leg"))
+        ) %>% 
+        filter(sample != "hhhlbody")
+    env$sprichness <- specnumber(x, MARGIN = 1)
+    env
+}
+ordinationplot_H1 <- function(x, y, z){
+  xlim <- c(-1.5, 1.0)
+  ylim <- c(-1, 1)
+  plot(x, ylab="", xlab="", xlim=xlim, ylim=ylim, type="n", main=y)
+  points(x, display = "sites", pch=16, cex=(z$sprichness/40), col=colorvec)
+  
+  with(z, legend("top", legend = unique(bodypart), bty = "n", col=colorvec, pt.cex=2, pch=16))
+  
+  cexnum <- 0.5
+  
+  with(z, ordispider(x, evenness, cex=cexnum, col=c("black"), label=TRUE, show.groups=(c("hlll"))))
+  with(z, ordispider(x, evenness, cex=cexnum, col=c("black"), label=TRUE, show.groups=(c("Hhml"))))
+  with(z, ordispider(x, evenness, cex=cexnum, col=c("black"), label=TRUE, show.groups=(c("hhhl"))))
+  with(z, ordispider(x, evenness, cex=cexnum, col=c("black"), label=TRUE, show.groups=(c("mmmm"))))
+}
+
+splminOTU_H1 <- splminOTU_all["H1"]
+envs <- map(splminOTU_H1, extract_env_H1)
+# run metaMDS
+ordinations <- map(splminOTU_H1, ordination)
+# extract names of the jmds elements
+plottitle <- names(ordinations)
+# plot ordinations, with H1 as plot title
+pmap(list(ordinations, plottitle, envs), ordinationplot_H1)
+
+# finally plot H2 and H3
+splminOTU_H2H3 <- splminOTU_all[c(23,24)]
+envs <- map(splminOTU_H2H3, extract_env)
+# run metaMDS
+ordinations <- map(splminOTU_H2H3, ordination)
+# extract names of the jmds elements
+plottitle <- names(ordinations)
+# plot ordinations, with jmds names as plot titles
+pmap(list(ordinations, plottitle, envs), ordinationplot)
+
+par(mfrow=c(1,1))
+```
+
+```{r Welchs t-test}
+t.test2 <- function(m1,m2,s1,s2,n1,n2,m0=0,equal.variance=FALSE)
+{
+  if( equal.variance==FALSE ) 
+  {
+    se <- sqrt( (s1^2/n1) + (s2^2/n2) )
+    # welch-satterthwaite df
+    df <- ( (s1^2/n1 + s2^2/n2)^2 )/( (s1^2/n1)^2/(n1-1) + (s2^2/n2)^2/(n2-1) )
+  } else
+  {
+    # pooled standard deviation, scaled by the sample sizes
+    se <- sqrt( (1/n1 + 1/n2) * ((n1-1)*s1^2 + (n2-1)*s2^2)/(n1+n2-2) ) 
+    df <- n1+n2-2
+  }      
+  t <- (m1-m2-m0)/se 
+  dat <- c(m1-m2, se, t, round(df,1), 2*pt(-abs(t),df))    
+  names(dat) <- c("Difference of means", "Std Error", "t", "df", "p-value")
+  return(dat) 
+}
+```
+
+
+plot Procrustes plots for A vs B
+optimal Ta and optimal cycle number
+```{r procrustes A B}
+# calculate all ordinations
+ordinations <- map(splminOTU_all, ordination)
+
+# same tags at optimal Tm, 3 such comparisons
+# A1:B1, A2:B2, A3:B3
+protestA1B1 <- protest(ordinations$A1, ordinations$B1)
+protestA2B2 <- protest(ordinations$A2, ordinations$B2)
+protestA3B3 <- protest(ordinations$A3, ordinations$B3)
+
+
+# different tags at optimal temperature, n = 12 such comparisons
+# A1:A2, A1:A3, A2:A3, A1:B2, A1:B3, A2:B1, A2:B3, A3:B1, A3:B2, B1:B2, B1:B3, B2:B3
+# procrustes tests
+protestA2A1 <- protest(ordinations$A2, ordinations$A1)
+protestA1A3 <- protest(ordinations$A1, ordinations$A3)
+protestA2A3 <- protest(ordinations$A2, ordinations$A3)
+protestA1B2 <- protest(ordinations$A1, ordinations$B2)
+protestA1B3 <- protest(ordinations$A1, ordinations$B3)
+protestA2B1 <- protest(ordinations$A2, ordinations$B1)
+protestA2B3 <- protest(ordinations$A2, ordinations$B3)
+protestA3B1 <- protest(ordinations$A3, ordinations$B1)
+protestA3B2 <- protest(ordinations$A3, ordinations$B2)
+protestB1B2 <- protest(ordinations$B1, ordinations$B2)
+protestB1B3 <- protest(ordinations$B1, ordinations$B3)
+protestB2B3 <- protest(ordinations$B2, ordinations$B3)
+
+# plot the procrustes superimposition graphs.
+# Top row Procrustes are between libraries using the same tags. The rest of the rows are between libraries using different tags.
+par(mfrow=c(4,4))
+plot(protestA1B1, main = "A1 vs B1")
+plot(protestA2B2, main = "A2 vs B2")
+plot(protestA3B3, main = "A3 vs B3")
+plot(0,type='n',axes=FALSE,ann=FALSE, main="Top row is between same tags")
+plot(protestA1A3, main = "A1 vs A3")
+plot(protestA1B2, main = "A1 vs B2")
+plot(protestA1B3, main = "A1 vs B3")
+plot(protestA3B1, main = "A3 vs B1")
+plot(protestA3B2, main = "A3 vs B2")
+plot(protestB1B2, main = "B1 vs B2")
+plot(protestB1B3, main = "B1 vs B3")
+plot(protestB2B3, main = "B2 vs B3")
+plot(protestA2A1, main = "A2 vs A1")
+plot(protestA2A3, main = "A2 vs A3")
+plot(protestA2B1, main = "A2 vs B1")
+plot(protestA2B3, main = "A2 vs B3")
+par(mfrow=c(1,1))
+
+# store correlation coefficients from Protest
+# pairwiseAB <- c("A2A1", "A1A3", "A2A3", "A1B2", "A1B3", "A2B1", "A2B3", "A3B1", "A3B2", "B1B2", "B1B3", "B2B3")
+pairwiseAB_sametags <- c("A1B1", "A2B2", "A3B3")
+pairwiseAB_difftags <- c("A1A3","A1B2","A1B3","A3B1","A3B2","B1B2","B1B3","B2B3","A2A1","A2A3","A2B1","A2B3")
+correlationsAB_sametags <- 0
+j=0
+for (i in pairwiseAB_sametags) {
+  j=j+1
+  correlationsAB_sametags[j] <- get(paste0("protest", i))[["scale"]] # correlation coefficient from protest 
+}
+
+correlationsAB_difftags <- 0
+j=0
+for (i in pairwiseAB_difftags) {
+  j=j+1
+  correlationsAB_difftags[j] <- get(paste0("protest", i))[["scale"]] # correlation coefficient from protest 
+}
+
+correlationsAB_sametags
+(n1 <- length(correlationsAB_sametags))
+(m1 <- mean(correlationsAB_sametags))
+(s1 <- sd(correlationsAB_sametags)/sqrt(length(correlationsAB_sametags)))
+
+correlationsAB_difftags
+(n2 <- length(correlationsAB_difftags))
+(m2 <- mean(correlationsAB_difftags))
+(s2 <- sd(correlationsAB_difftags)/sqrt(length(correlationsAB_difftags)))
+
+(ABsinglepoolstest <- t.test2(m1, m2, s1, s2, n1, n2))
+```
+
+plot Procrustes plots for C vs D
+high Ta and optimal cycle number
+```{r procrustes C D}
+protestC1D1 <- protest(ordinations$C1, ordinations$D1)
+protestC2D2 <- protest(ordinations$C2, ordinations$D2)
+protestC3D3 <- protest(ordinations$C3, ordinations$D3)
+
+# different tags at higher than optimal temperature, n = 12 such comparisons
+# C1:C2, C1:C3, C2:C3, C1:D2, C1:D3, C2:D1, C2:D3, C3:D1, C3:D2, D1:D2, D1:D3, D2:D3
+# procrustes tests
+  protestC1C2 <- protest(ordinations$C1, ordinations$C2)
+  protestC1C3 <- protest(ordinations$C1, ordinations$C3)
+  protestC2C3 <- protest(ordinations$C2, ordinations$C3)
+  protestC1D2 <- protest(ordinations$C1, ordinations$D2)
+  protestC1D3 <- protest(ordinations$C1, ordinations$D3)
+  protestC2D1 <- protest(ordinations$C2, ordinations$D1)
+  protestC2D3 <- protest(ordinations$C2, ordinations$D3)
+  protestC3D1 <- protest(ordinations$C3, ordinations$D1)
+  protestC3D2 <- protest(ordinations$C3, ordinations$D2)
+  protestD1D2 <- protest(ordinations$D1, ordinations$D2)
+  protestD1D3 <- protest(ordinations$D1, ordinations$D3)
+  protestD2D3 <- protest(ordinations$D2, ordinations$D3)
+
+# plot the procrustes superimposition graphs.
+# Top row Procrustes are between libraries using the same tags. The rest of the rows are between libraries using different tags.
+par(mfrow=c(4,4))
+plot(protestC1D1, main = "C1 vs D1")
+plot(protestC2D2, main = "C2 vs D2")
+plot(protestC3D3, main = "C3 vs D3")
+plot(0,type='n',axes=FALSE,ann=FALSE, main="Top row is between same tags")
+plot(protestC1C2, main = "C1 vs C2")
+plot(protestC1C3, main = "C1 vs C3")
+plot(protestC2C3, main = "C2 vs C3")
+plot(protestC1D2, main = "C1 vs D2")
+plot(protestC1D3, main = "C1 vs D3")
+plot(protestC2D1, main = "C2 vs D1")
+plot(protestC2D3, main = "C2 vs D3")
+plot(protestC3D1, main = "C3 vs D1")
+plot(protestC3D2, main = "C3 vs D2")
+plot(protestD1D2, main = "D1 vs D2")
+plot(protestD1D3, main = "D1 vs D3")
+plot(protestD2D3, main = "D2 vs D3")
+par(mfrow=c(1,1))
+
+
+# store correlation coefficients from Protest
+pairwiseCD_sametags <- c("C1D1","C2D2","C3D3")
+pairwiseCD_difftags <- c("C1C2", "C1C3", "C2C3", "C1D2", "C1D3", "C2D1", "C2D3", "C3D1", "C3D2", "D1D2", "D1D3", "D2D3")
+correlationsCD_sametags <- 0
+j=0
+for (i in pairwiseCD_sametags) {
+  j=j+1
+  correlationsCD_sametags[j] <- get(paste0("protest", i))[["scale"]] # correlation coefficient from protest 
+}
+
+correlationsCD_difftags <- 0
+j=0
+for (i in pairwiseCD_difftags) {
+  j=j+1
+  correlationsCD_difftags[j] <- get(paste0("protest", i))[["scale"]] # correlation coefficient from protest 
+}
+
+correlationsCD_sametags
+(n1 <- length(correlationsCD_sametags))
+(m1 <- mean(correlationsCD_sametags))
+(s1 <- sd(correlationsCD_sametags)/sqrt(length(correlationsCD_sametags)))
+
+correlationsCD_difftags
+(n1 <- length(correlationsCD_difftags))
+(m2 <- mean(correlationsCD_difftags))
+(s2 <- sd(correlationsCD_difftags)/sqrt(length(correlationsCD_difftags)))
+
+(CDsinglepoolstest <- t.test2(m1, m2, s1, s2, n1, n2))
+```
+
+plot Procrustes plots for G and H (omit H1)
+Touchdown PCR
+```{r procrustes G H}
+# protestG1H1 <- protest(ordinations$G1, ordinations$H1) # H1 cannot be used because is is missing one sample hhhlleg
+protestG2H2 <- protest(ordinations$G2, ordinations$H2)
+protestG3H3 <- protest(ordinations$G3, ordinations$H3)
+
+
+# different tags at higher than optimal temperature, n = 12 such comparisons
+# G1:G2, G1:G3, G2:G3, G1:H2, G1:H3, G2:H1, G2:H3, G3:H1, G3:H2, H1:H2, H1:H3, H2:H3
+# procrustes tests
+  protestG1G2 <- protest(ordinations$G1, ordinations$G2)
+  protestG1G3 <- protest(ordinations$G1, ordinations$G3)
+  protestG2G3 <- protest(ordinations$G2, ordinations$G3)
+  protestG1H2 <- protest(ordinations$G1, ordinations$H2)
+  protestG1H3 <- protest(ordinations$G1, ordinations$H3)
+  # protestG2H1 <- protest(ordinations$G2, ordinations$H1)
+  protestG2H3 <- protest(ordinations$G2, ordinations$H3)
+  # protestG3H1 <- protest(ordinations$G3, ordinations$H1)
+  protestG3H2 <- protest(ordinations$G3, ordinations$H2)
+  # protestH1H2 <- protest(ordinations$H1, ordinations$H2)
+  # protestH1H3 <- protest(ordinations$H1, ordinations$H3)
+  protestH2H3 <- protest(ordinations$H2, ordinations$H3)
+
+# plot the procrustes superimposition graphs.
+# Top row Procrustes are between libraries using the same tags. The rest of the rows are between libraries using different tags.
+par(mfrow=c(3,4))
+# plot(protestG1H1, main = "G1 vs H1")
+plot(protestG2H2, main = "G2 vs H2")
+plot(protestG3H3, main = "G3 vs H3")
+plot(0,type='n',axes=FALSE,ann=FALSE, main="Top row is between same tags")
+plot(0,type='n',axes=FALSE,ann=FALSE, main="Top row is between same tags")
+plot(protestG1G2, main = "G1 vs G2")
+plot(protestG1G3, main = "G1 vs G3")
+plot(protestG2G3, main = "G2 vs G3")
+plot(protestG1H2, main = "G1 vs H2")
+plot(protestG1H3, main = "G1 vs H3")
+# plot(protestG2H1, main = "G2 vs H1")
+plot(protestG2H3, main = "G2 vs H3")
+# plot(protestG3H1, main = "G3 vs H1")
+plot(protestG3H2, main = "G3 vs H2")
+# plot(protestH1H2, main = "H1 vs H2")
+# plot(protestH1H3, main = "H1 vs H3")
+plot(protestH2H3, main = "H2 vs H3")
+par(mfrow=c(1,1))
+
+
+# store correlation coefficients from Protest
+pairwiseGH_sametags <- c("G2H2","G3H3")
+pairwiseGH_difftags <- c("G1G2", "G1G3", "G2G3", "G1H2", "G1H3", "G2H3", "G3H1", "G3H2", "H2H3")
+correlationsGH_sametags <- 0
+j=0
+for (i in pairwiseGH_sametags) {
+  j=j+1
+  correlationsGH_sametags[j] <- get(paste0("protest", i))[["scale"]] # correlation coefficient from protest 
+}
+
+correlationsGH_difftags <- 0
+j=0
+for (i in pairwiseGH_difftags) {
+  j=j+1
+  correlationsGH_difftags[j] <- get(paste0("protest", i))[["scale"]] # correlation coefficient from protest 
+}
+
+correlationsGH_sametags
+(n1 <- length(correlationsGH_sametags))
+(m1 <- mean(correlationsGH_sametags))
+(s1 <- sd(correlationsGH_sametags)/sqrt(length(correlationsGH_sametags)))
+
+correlationsGH_difftags
+(n2 <- length(correlationsGH_difftags))
+(m2 <- mean(correlationsGH_difftags))
+(s2 <- sd(correlationsGH_difftags)/sqrt(length(correlationsGH_difftags)))
+
+(GHsinglepoolstest <- t.test2(m1, m2, s1, s2, n1, n2))
+```
+
+

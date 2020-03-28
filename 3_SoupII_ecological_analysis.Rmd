@@ -1,0 +1,781 @@
+This script creates all figures and tables except for the singlepool Tagbias figures. It continues after 2_SoupII_fastp_to_Begum_Metabarcoding_pipeline.sh moved OTU tables and MTB_Blast results to analysis/ folder. 
+
+```{r setup chunk, message=FALSE}
+# copy the following into each script   
+knitr::opts_chunk$set(
+	message = FALSE,
+	warning = FALSE,
+	include = FALSE
+)
+
+# script-specific libraries
+library(vegan)
+library(car)
+library(phyloseq)
+library(data.table)
+# devtools::install_github("grunwaldlab/metacoder")
+library(metacoder)
+
+# general-use packages
+library(here)
+library(tidyverse) 
+library(readxl)
+library(cowplot)
+library(lubridate)
+library(patchwork)
+# library(sessioninfo)
+library(arsenal) # for summary(comparedf())
+library(sjmisc) # for rotate_df()
+library(broom)
+library(lme4)
+library(MuMIn)
+library(ggeasy)
+library(RColorBrewer)
+library(envDocument)
+library(conflicted)
+  conflict_prefer("mutate", "dplyr", quiet = TRUE)
+  conflict_prefer("select", "dplyr", quiet = TRUE)
+  conflict_prefer("summarise", "dplyr", quiet = TRUE)
+  conflict_prefer("filter", "dplyr", quiet = TRUE)
+  conflict_prefer("first", "dplyr", quiet = TRUE)
+  conflict_prefer("here", "here", quiet = TRUE)
+  conflict_prefer("separate", "tidyr", quiet = TRUE)
+  conflict_prefer("unite", "tidyr", quiet = TRUE)
+  conflict_prefer("intersect", "dplyr", quiet = TRUE)
+  conflict_prefer("year", "lubridate", quiet = TRUE)
+  conflict_prefer("setdiff", "dplyr", quiet = TRUE) # w/out this, R crashes
+  
+env_doc("table", git = FALSE)
+# sessionInfo() # base R method
+# sessioninfo::session_info() # package sessioninfo method
+
+# Provide real numbers, not scientific notation.
+options(scipen = 999)
+
+# rm(list=ls())
+```
+
+########################################################################
+Import tables, join, and remove small OTUs using phyloseq rarefaction
+########################################################################
+
+Import OTU tables. These tables include only Arthropoda-assigned OTUs. 
+```{r begumfilter selection}
+# begumfilter <- "Filter_min1PCRs_min1copies"
+begumfilter <- "Filter_min2PCRs_min4copies"
+# begumfilter <- "Filter_min3PCRs_min3copies"
+```
+
+```{r import OTU tables}
+otutables <- "table_BioSoupII_97_lulu_Arthropoda_\\w.txt"
+
+otu_files <- list.files(Sys.glob(file.path("..", "analysis", begumfilter)), pattern = otutables, full.names = TRUE)
+    # list.files is used to look for files matching "table_BioSoupII_97_lulu_Arthropoda_\\w.txt"
+    # full.names = TRUE returns the pathnames
+    # \\ is used to escape \ and . (because otherwise they are read with grep as "ignore" and "any character". R needs a second \)
+head(otu_files); cat("    ", length(otu_files), "total files")
+
+# function to read_tsv the files
+readotutables <- function(x) {
+    df <- read_tsv(x, na = "NA") 
+    df
+}
+otu <- map(otu_files, readotutables)
+
+# name dfs in spl list
+folderpoolvec <- sub("table_BioSoupII_97_lulu_Arthropoda_(\\w).txt", "\\1", basename(otu_files), perl=TRUE)
+names(otu) <- folderpoolvec
+
+# individual otu tables can be referred to as otu$folder: otu$A
+```
+
+phyloseq filtering by OTU size. This step removes "small" OTUs, which are probably artefacts of PCR and sequencing error, i.e. echo OTUs, which should have been clustered into the legitimate OTUs. What is "small"?  It is a bit subjective, but the phyloseq method helps us make a judgement. Phyloseq creates a rarefaction curve, showing how many OTUs would be removed at each minimum OTU size. A minimum OTU size is set at the tangent to this curve. See the graphs created below to understand this.
+
+Strategy:  survey the OTU tables to decide on a common min OTU size. Then apply a function to all OTU tables in the otu list.
+```{r phyloseq analysis, eval=FALSE}
+# choose a table
+communityAll_t <- otu$H
+
+# Inspect the control sample (PC, PCR, xb) OTUs and filter the OTU table.  
+communityAll_t <- communityAll_t %>% arrange(desc(PC))
+# View(communityAll_t)
+communityAll_t <- communityAll_t %>% select(-starts_with("PC"), -starts_with("xb"))
+
+# Transpose to make canonical OTU tables (sample X OTU format) for community analysis
+communityAll <- rotate_df(communityAll_t, cn = TRUE)
+# OTU sizes are the colSums (not the number of reads within each cell)
+# colSums(communityAll)
+
+# phyloseq code
+TotalCounts <- c(colSums(communityAll))
+tdt = data.table(OTUs = colnames(communityAll), TotalCounts = colSums(communityAll), OTU = colnames(communityAll))
+taxcumsum = tdt[, .N, by = TotalCounts]
+setkey(taxcumsum, TotalCounts)
+taxcumsum[, CumSum := cumsum(N)]
+# Define the plot
+(pCumSum = ggplot(taxcumsum, aes(TotalCounts, CumSum)) + 
+  geom_point() + 
+  xlab("Filtering Threshold:  Minimum Read Number per OTU") +
+  ylab("OTUs That Would Be Filtered Out") +
+  ggtitle("Number of OTUs that would be filtered out at different minimum OTU size thresholds") + 
+    scale_x_continuous(breaks = scales::pretty_breaks(n = 25), limits = c(0, 100)) +
+    scale_y_continuous(breaks = scales::pretty_breaks(n = 25)))
+```
+
+I look to see if the curve starts with a near-vertical rise, which indicates a large number of very small OTUs. 
+
+Filter_min1PCRs_min1copies: After viewing multiple OTU tables, I have set the min OTU size threshold to be 10, which is roughly the x-intercept of the tangent to the curve in the limits=c(0,100) plot. For instance, in otu$A, setting threshold_otu_size==10 reduces OTU number from 2729 to 509. Since we expect around 250 OTUs, this is clearly not enough to filter out bad OTUs, but note that we are not relying on this step to do that. We are relying on Begum filtering, which is not being applied to Filter_min1PCRs_min1copies
+
+Filter_min2PCRs_min4copies: I set the minOTU size threshold to 5, since there is no vertical part of the curve.
+
+Filter_min3PCRs_min3copies: I set the minOTU size threshold to 5, since there is no vertical part of the curve.
+```{r filter OTU tables for min OTU size and set 1-read cells to 0}
+threshold_otu_size <- 5
+
+minOTUsizefilter <- function(df){
+    df <- df %>% select(-starts_with("PC"), -starts_with("xb")) # tidyverse
+    df <- rotate_df(df, cn = TRUE) # sjmisc
+    df <- df[, colSums(df) >= threshold_otu_size] # base R
+    df[df == 1] <- 0 # base R
+    df
+}
+
+OTUminsize <- map(otu, minOTUsizefilter)
+
+# splminOTU <- minOTUsizefilter(spl$A1)
+# View(splminOTU)
+# rm(splminOTU)
+```
+
+Check that all samples (rows) still have sufficient numbers of reads in them.  This isn't a risk with this dataset, but some datasets have samples with few, low-read-number OTUs. Removing small OTUs will sometimes produce samples (rows) that have almost no data, because that sample failed during PCR or DNA extraction. 
+```{r view rowsums}
+tablerowsums <- map_dfr(OTUminsize, rowSums)
+# View(tablerowsums)
+```
+
+
+########################################################################
+Community analysis, Figure NMDS
+########################################################################
+
+Plot NMDS of every OTU table after phyloseq filtering
+```{r ordinations and plot ordinations, eval=FALSE}
+(colorvec <- c("#EF8A62", "#67A9CF"))  # from:  brewer.pal(3,"RdBu")
+
+extract_env <- function(x){
+    ## extract env variables
+    env <- x %>%
+        rownames_to_column() %>% 
+        select(sample = rowname) %>% 
+        mutate(
+            bodypart = case_when(
+                grepl("body", sample) == TRUE ~ "body",
+                grepl("leg", sample) == TRUE ~ "leg"
+            )
+        ) %>%
+        mutate(
+            bodypartcolor = if_else(bodypart == "body", 1, 2)
+        ) %>% 
+        mutate(
+            evenness = str_remove(sample, c("body|leg"))
+        )
+    env$sprichness <- specnumber(x, MARGIN = 1)
+    env
+}
+ordination <- function(x){
+    df <- metaMDS(x, distance = "bray", trymax = 40, binary=FALSE)
+    df
+}
+ordinationplot <- function(x, y, z){
+  xlim <- c(-1, 1) 
+  ylim <- c(-0.75, 0.75) 
+  plot(x, ylab="", xlab="", xlim=xlim, ylim=ylim, type="n", main=y) 
+   
+  points(x, display = "sites", pch=16, cex=(z$sprichness/60), col=colorvec)
+  
+  with(z, legend("topright", legend = unique(bodypart), bty = "n", col=colorvec, pt.cex=2, pch=16, y.intersp = 1))
+  
+  cexnum <- 0.5
+  
+  with(z, ordispider(x, evenness, cex=cexnum, col=c("black"), label=TRUE, show.groups=(c("hlll"))))
+  with(z, ordispider(x, evenness, cex=cexnum, col=c("black"), label=TRUE, show.groups=(c("Hhml"))))
+  with(z, ordispider(x, evenness, cex=cexnum, col=c("black"), label=TRUE, show.groups=(c("hhhl"))))
+  with(z, ordispider(x, evenness, cex=cexnum, col=c("black"), label=TRUE, show.groups=(c("mmmm"))))
+}
+stressplotfxn <- function(x){
+    stressplot(x)
+}
+
+OTUminsize_all <- OTUminsize
+
+# plot stressplots
+par(mfrow=c(3,3))
+ordinations <- map(OTUminsize_all, ordination)
+map(ordinations, stressplotfxn)
+par(mfrow=c(1,1))
+
+# ordinations and ordination plots 
+# extract env data
+envs <- map(OTUminsize, extract_env)
+# run metaMDS
+ordinations <- map(OTUminsize, ordination)
+# extract names of the jmds elements
+plottitle <- names(ordinations)
+# plot ordinations, with jmds names as plot titles
+par(mfrow=c(2,2))
+pmap(list(ordinations, plottitle, envs), ordinationplot)
+par(mfrow=c(1,1))
+```
+
+# plot an ordination from just one experiment (PCR A). This figure is used for "Figure NMDS". 
+```{r ordination and plot ordination from one pcr Figure NMDS, eval=FALSE}
+OTUminsize_one <- OTUminsize["A"]
+
+# ordinations and ordination plots 
+# extract env data
+par(mfrow=c(1,1))
+envs <- map(OTUminsize_one, extract_env)
+# run metaMDS
+ordination_one <- map(OTUminsize_one, ordination)
+# extract names of the jmds elements
+plottitle <- names(ordination_one)
+# plot ordination, with jmds names as plot titles
+pmap(list(ordination_one, plottitle, envs), ordinationplot)
+```
+
+
+########################################################################
+Dropout analysis, Table DROPS
+########################################################################
+
+Combine echo OTUs and count the number of drop-ins and drop-outs.  
+
+Echoes are split OTUs (that failed to get merged by LULU). (i.e. 1 high and N moderately high pidents)
+Drop-ins are OTUs that do not match any of the MTB refs (i.e. a low pident to all MTBs)
+Drop-outs are MTB seqs that did not match to an OTU
+
+Import BLAST/vsearch tables. I am using the vsearch tables, but the BLAST results are the same. 
+```{r import blast vsearch tables}
+# otutables <- "table_BioSoupII_\\w_Arthropoda.blastnMTB.txt"
+otutables <- "table_BioSoupII_\\w_Arthropoda.vsearchMTB.txt"
+begumfilter # confirm correct value
+
+otu_files <- list.files(Sys.glob(file.path("..", "analysis", begumfilter)), pattern = otutables, full.names = TRUE)
+    # list.files is used to look for files matching "table_BioSoupII_97_lulu_Arthropoda_\\w.txt"
+    # full.names = TRUE returns the pathnames
+    # \\ is used to escape \ and . (because otherwise they are read with grep as "ignore" and "any character". R needs a second \)
+head(otu_files); cat("    ", length(otu_files), "total files")
+
+mtbcolnames <- c("qseqid", "sseqid", "pident", "length", "mismatch", "gapopen", "qstart", "qend", "sstart", "send", "evalue", "bitscore")
+
+pident_threshold <- 94 # initial filtering, to be filtered more stringently later
+length_threshold <- 250 # initial filtering, to be filtered more stringently later
+
+# function to read_tsv the files
+readotutables <- function(x) {
+    df <- read_tsv(x, na = "NA", col_names = mtbcolnames) %>% 
+        filter(pident >= pident_threshold & length > length_threshold)
+    df
+}
+
+blastmtb <- map(otu_files, readotutables) # note that this could contain either the blastn or vsearch results. blastn and vsearch results appear to be the same, as far as i've checked. I'm using the vsearch results
+
+# name dfs in spl list
+# foldervec <- sub("table_BioSoupII_(\\w)_Arthropoda.blastnMTB.txt", "\\1", basename(otu_files), perl=TRUE)
+foldervec <- sub("table_BioSoupII_(\\w)_Arthropoda.vsearchMTB.txt", "\\1", basename(otu_files), perl=TRUE)
+names(blastmtb) <- foldervec
+# individual otu tables can be referred to as blastout$folder: blastout$A
+```
+
+```{r import MTB DNA input amt table}
+# read in MTB_REF file (updated on 20171129 to include the input DNA amounts and morphological ID to order level)
+MTB_AllInputRefSeqs <- file.path("..", "data", "MTB", "S2_MTB_AllInputRefSeqs_20180321.xlsx")
+
+MTB_excel <- read_excel(path = MTB_AllInputRefSeqs, sheet = "RDP_midori", col_types = c("text","numeric","numeric","numeric","numeric","numeric","numeric","numeric","numeric","numeric","numeric","numeric","numeric","numeric","numeric","numeric","numeric", "text","text","skip","skip","skip","skip","skip","skip","skip","skip","skip","skip","skip","skip","skip","skip","skip","skip","skip"))
+```
+
+
+Join the OTU tables with the BLAST or vsearch tables, and then join the MTB_excel table to add DNA concentrations and morphological IDs. Final table is *OTUBLASTqpcr*
+```{r join otu blast or vsearch mtbexcel tables}
+joinfxn1 <- function(blasttable, otutable){
+    otutable_t <- rotate_df(otutable, rn = "OTU_ID")
+    df <- left_join(otutable_t, blasttable, by = c("OTU_ID" = "qseqid"))
+}
+joinfxn2 <- function(OTUBLASTtable, MTB_excel){
+    df <- left_join(OTUBLASTtable, MTB_excel, by = c("sseqid" = "MTBseq"))
+}
+
+OTUBLAST <- map2(blastmtb, OTUminsize, joinfxn1)
+
+MTB_excel_list <- list(MTB_excel, MTB_excel, MTB_excel, MTB_excel, MTB_excel, MTB_excel, MTB_excel, MTB_excel)
+
+OTUBLASTqpcr <- map2(OTUBLAST, MTB_excel_list, joinfxn2)
+```
+
+Now I have a complete table. Next step is to calculate hits (recovered input species), dropouts, and drop-ins after filtering for pident_threshold2, filtering out PC OTUs, and summing together echo OTUs when counting up hits. 
+
+Echo OTUs are MTB seqs that are hit by multiple OTUs, due to incomplete clustering. We are not testing OTU clustering methods, so while we don't like this, we consider a hit by 1 or more OTUs to be a success with regards to recovering the information. Echo OTUs are not very common, and there is usually one large OTU with high similarity to the MTBseq and one or more echo OTUs with many fewer reads at 97% similarity.
+
+Filter_min1PCRs_min1copies
+Filter_min2PCRs_min4copies
+```{r hits dropouts and dropins for these 2 begumfilters}
+pident_threshold2 <- 97 # min % similarity to be considered a match to an MTBseq
+
+# number of hit OTUs per soup (OTUs matching an MTBseq), combining echo OTUs
+MTB_hits <- function(OTUBLASTqpcr) {
+    OTUBLASTqpcr %>% 
+    filter(!is.na(sseqid)) %>%  # remove drop-ins
+    filter(pident >= pident_threshold2) %>% # remove drop-ins
+    filter(!str_starts(sseqid, "P")) %>% # remove hits to positive ctrl
+    select(hlllleg, hlllbody, Hhmlleg, Hhmlbody, hhhlleg, hhhlbody, mmmmleg, mmmmbody,sseqid) %>% 
+    group_by(sseqid) %>% # group by MTBseq
+    summarise_at(vars(hlllleg, hlllbody, Hhmlleg, Hhmlbody, hhhlleg, hhhlbody, mmmmleg, mmmmbody), sum, na.rm = TRUE) %>% # sum reads per sseqid
+    mutate_if(is.numeric, ~1 * (. > 0)) %>% # convert read sums > 1 to 1
+    ungroup() %>% 
+    summarise_at(vars(hlllleg, hlllbody, Hhmlleg, Hhmlbody, hhhlleg, hhhlbody, mmmmleg, mmmmbody), sum, na.rm = TRUE) # sum hits over all sseqid
+}
+
+# number of drop-in OTUs, defined as no-hit to MTBseq or pident<97% (~50% each type)
+OTU_dropins <- function(OTUBLASTqpcr) {
+    OTUBLASTqpcr %>% 
+    filter(is.na(sseqid) | pident < pident_threshold2) %>% # keep drop-ins
+    mutate_if(is.numeric, ~1 * (. > 0)) %>% # convert numbers > 1 to 1
+    summarise_at(vars(hlllleg, hlllbody, Hhmlleg, Hhmlbody, hhhlleg, hhhlbody, mmmmleg, mmmmbody), sum, na.rm = TRUE)
+}
+
+OTUBLAST_hits <- map_dfr(OTUBLASTqpcr, MTB_hits, .id = "PCR")
+OTUBLAST_dropins <- map_dfr(OTUBLASTqpcr, OTU_dropins, .id = "PCR")
+
+maxMTB <- 248 # max number of input OTUs
+
+OTUBLAST_hits_t <- rotate_df(OTUBLAST_hits, rn = "soup", cn = TRUE) %>% 
+    filter(soup == "mmmmbody")
+OTUBLAST_hits_t$metric <- "hits"
+
+OTUBLAST_dropins_t <- rotate_df(OTUBLAST_dropins, rn = "soup", cn = TRUE) %>% 
+    filter(soup == "mmmmbody")
+OTUBLAST_dropins_t$metric <- "dropins"
+
+# calculate % of input MTB OTUs recovered by metabarcoding and round to 2 digits
+OTUBLAST_hits_pct <- OTUBLAST_hits_t %>% 
+    mutate_at(vars(A:H), list(~ ./maxMTB)) %>%
+    mutate_at(vars(A:H), list(~ round(., digits = 3)))
+OTUBLAST_hits_pct$metric <- "hit_pct"
+
+# calculate % of OTUs that are dropins
+OTUBLAST_dropins_pct <- OTUBLAST_dropins_t %>% 
+    mutate_at(vars(A:H), list(~ ./maxMTB)) %>%
+    mutate_at(vars(A:H), list(~ round(., digits = 3)))
+OTUBLAST_dropins_pct$metric <- "dropin_pct"
+
+# calculate number of dropouts and % dropouts
+OTUBLAST_dropouts <- OTUBLAST_hits_t %>% 
+    mutate_at(vars(A:H), list(~maxMTB - .))
+OTUBLAST_dropouts$metric <- "dropouts"
+
+OTUBLAST_dropouts_pct <- OTUBLAST_dropouts %>% 
+    mutate_at(vars(A:H), list(~ ./maxMTB)) %>%
+    mutate_at(vars(A:H), list(~ round(., digits = 3)))
+OTUBLAST_dropouts_pct$metric <- "dropouts_pct"
+
+# create sub-table for Table DROPS
+assign(paste("OTUBLAST_all", pident_threshold2, begumfilter, sep = "_"), bind_rows(OTUBLAST_hits_t, OTUBLAST_dropouts, OTUBLAST_dropouts_pct, OTUBLAST_dropins_t, OTUBLAST_dropins_pct))
+# assign() command builds begumfilter into object names
+# e.g. OTUBLAST_all_97_Filter_min1PCRs_min1copies
+```
+
+Filter_min3PCRs_min3copies
+Modified code because PCR H lacks hhhlbody
+```{r hits dropouts and dropins for Filter_min3PCRs_min3copies}
+pident_threshold2 <- 97 # min % similarity to be considered a match to an MTBseq
+
+# number of hit OTUs per soup (OTUs matching an MTBseq), combining echo OTUs
+MTB_hits <- function(OTUBLASTqpcr) {
+    OTUBLASTqpcr %>% 
+    filter(!is.na(sseqid)) %>%  # remove drop-ins
+    filter(pident >= pident_threshold2) %>% # remove drop-ins
+    filter(!str_starts(sseqid, "P")) %>% # remove hits to positive ctrl
+    select(hlllleg, hlllbody, Hhmlleg, Hhmlbody, hhhlleg, mmmmleg, mmmmbody,sseqid) %>% 
+    group_by(sseqid) %>% # group by MTBseq
+    summarise_at(vars(hlllleg, hlllbody, Hhmlleg, Hhmlbody, hhhlleg, mmmmleg, mmmmbody), sum, na.rm = TRUE) %>% # sum reads per sseqid
+    mutate_if(is.numeric, ~1 * (. > 0)) %>% # convert read sums > 1 to 1
+    ungroup() %>% 
+    summarise_at(vars(hlllleg, hlllbody, Hhmlleg, Hhmlbody, hhhlleg, mmmmleg, mmmmbody), sum, na.rm = TRUE) # sum hits over all sseqid
+}
+
+# number of drop-in OTUs, defined as no-hit to MTBseq or pident<97% (~50% each type)
+OTU_dropins <- function(OTUBLASTqpcr) {
+    OTUBLASTqpcr %>% 
+    filter(is.na(sseqid) | pident < pident_threshold2) %>% # keep drop-ins
+    mutate_if(is.numeric, ~1 * (. > 0)) %>% # convert numbers > 1 to 1
+    summarise_at(vars(hlllleg, hlllbody, Hhmlleg, Hhmlbody, hhhlleg, mmmmleg, mmmmbody), sum, na.rm = TRUE)
+}
+
+OTUBLAST_hits <- map_dfr(OTUBLASTqpcr, MTB_hits, .id = "PCR")
+OTUBLAST_dropins <- map_dfr(OTUBLASTqpcr, OTU_dropins, .id = "PCR")
+
+maxMTB <- 248 # max number of input OTUs
+
+OTUBLAST_hits_t <- rotate_df(OTUBLAST_hits, rn = "soup", cn = TRUE) %>% 
+    filter(soup == "mmmmbody")
+OTUBLAST_hits_t$metric <- "hits"
+
+OTUBLAST_dropins_t <- rotate_df(OTUBLAST_dropins, rn = "soup", cn = TRUE) %>% 
+    filter(soup == "mmmmbody")
+OTUBLAST_dropins_t$metric <- "dropins"
+
+# calculate % of input MTB OTUs recovered by metabarcoding and round to 2 digits
+OTUBLAST_hits_pct <- OTUBLAST_hits_t %>% 
+    mutate_at(vars(A:H), list(~ ./maxMTB)) %>%
+    mutate_at(vars(A:H), list(~ round(., digits = 3)))
+OTUBLAST_hits_pct$metric <- "hit_pct"
+
+# calculate % of OTUs that are dropins
+OTUBLAST_dropins_pct <- OTUBLAST_dropins_t %>% 
+    mutate_at(vars(A:H), list(~ ./maxMTB)) %>%
+    mutate_at(vars(A:H), list(~ round(., digits = 3)))
+OTUBLAST_dropins_pct$metric <- "dropin_pct"
+
+# calculate number of dropouts and % dropouts
+OTUBLAST_dropouts <- OTUBLAST_hits_t %>% 
+    mutate_at(vars(A:H), list(~maxMTB - .))
+OTUBLAST_dropouts$metric <- "dropouts"
+
+OTUBLAST_dropouts_pct <- OTUBLAST_dropouts %>% 
+    mutate_at(vars(A:H), list(~ ./maxMTB)) %>%
+    mutate_at(vars(A:H), list(~ round(., digits = 3)))
+OTUBLAST_dropouts_pct$metric <- "dropouts_pct"
+
+# create sub-table for Table DROPS
+assign(paste("OTUBLAST_all", pident_threshold2, begumfilter, sep = "_"), bind_rows(OTUBLAST_hits_t, OTUBLAST_dropouts, OTUBLAST_dropouts_pct, OTUBLAST_dropins_t, OTUBLAST_dropins_pct))
+# assign() command builds begumfilter into object names
+# e.g. OTUBLAST_all_97_Filter_min1PCRs_min1copies
+```
+
+Rerun the above starting from code chunk `import OTU tables` for all three begumfilter values. When finished, add begumfilter metadata, combine subtables, and write Table DROPs to file:
+```{r combine and write table Table DROPS}
+OTUBLAST_all_97_Filter_min1PCRs_min1copies$begumfilter <- "min1PCRs_min1copies"
+OTUBLAST_all_97_Filter_min2PCRs_min4copies$begumfilter <- "min2PCRs_min4copies"
+OTUBLAST_all_97_Filter_min3PCRs_min3copies$begumfilter <- "min3PCRs_min3copies"
+
+Table_DROPS_97 <- bind_rows(OTUBLAST_all_97_Filter_min1PCRs_min1copies, OTUBLAST_all_97_Filter_min2PCRs_min4copies, OTUBLAST_all_97_Filter_min3PCRs_min3copies) %>% 
+    select(soup, begumfilter, metric, everything())
+
+# write_tsv(Table_DROPS_97, file.path("..", "paper", "Table_DROPS_97.txt"))
+```
+
+########################################################################
+Evenness analysis, Figure SHANNON
+########################################################################
+Using begumfilter "Filter_min2PCRs_min4copies"
+```{r Figure Shannon}
+OTUBLAST_hits_t_all_long <- rotate_df(OTUBLAST_hits, rn = "soup", cn = TRUE) %>% 
+    pivot_longer(A:H, names_to = "PCR", values_to = "OTU_hits") %>% 
+    mutate(
+        shannon = case_when(
+            soup == "hlllbody" ~ 4.08,
+            soup == "Hhmlbody" ~ 4.56,
+            soup == "hhhlbody" ~ 5.17,
+            soup == "mmmmbody" ~ 5.39,
+            soup == "hlllleg" ~ 4.13,
+            soup == "Hhmlleg" ~ 4.21,
+            soup == "hhhlleg" ~ 5.04,
+            soup == "mmmmleg" ~ 5.32
+        ),
+        bodypart = case_when(
+            str_detect(soup, "leg") == TRUE ~ "leg",
+            str_detect(soup, "body") == TRUE ~ "body"
+        )
+    ) 
+
+# regression random-effects models, body and leg fit separately
+bodydf <- OTUBLAST_hits_t_all_long %>% filter(bodypart == "body")
+legdf <- OTUBLAST_hits_t_all_long %>% filter(bodypart == "leg")
+
+# bodydf
+mod1 <- lmer(OTU_hits ~ shannon + (1 | PCR), data = bodydf, REML = FALSE)
+mod2 <- lmer(OTU_hits ~ 1 + (1 | PCR), data = bodydf, REML = FALSE)
+anova(mod1, mod2)
+# P < 0.001
+mod1.final <- lmer(OTU_hits ~ shannon + (1 | PCR), data = bodydf, REML = TRUE)
+r.squaredGLMM(mod1.final) # MuMin package
+# R2m: 0.784
+
+# legdf
+mod1 <- lmer(OTU_hits ~ shannon + (1 | PCR), data = legdf, REML = FALSE)
+mod2 <- lmer(OTU_hits ~ 1 + (1 | PCR), data = legdf, REML = FALSE)
+anova(mod1, mod2)
+# P < 0.001
+mod1.final <- lmer(OTU_hits ~ shannon + (1 | PCR), data = legdf, REML = TRUE)
+r.squaredGLMM(mod1.final) # MuMin package
+# R2m: 0.373
+
+# plot
+body <- OTUBLAST_hits_t_all_long %>% 
+    filter(bodypart == "body") %>% 
+    ggplot(. , aes(x = shannon, y = OTU_hits, group = PCR, colour = PCR)) +
+    geom_point() +
+    ylim(50, 250) +
+    geom_smooth(method = "lm", se = FALSE) +
+    labs(x = "Evenness (Shannon diversity)", 
+         y = "Number of OTUs matched to a Reference") +
+    theme_cowplot() +
+    facet_wrap(~bodypart) +
+    scale_colour_viridis_d(option = "cividis") +
+    theme(legend.position='none') +
+    annotate("text", x = 4.2, y = 55, label = "hlll") +
+    annotate("text", x = 4.65, y = 185, label = "Hhml") +
+    annotate("text", x = 5.2, y = 130, label = "hhhl") +
+    annotate("text", x = 5.3, y = 180, label = "mmmm") +
+    annotate("text", x = 4.6, y = 250, label = "paste(\"p<0.001, \", italic(marginal_R) ^ 2, \" = 78.4\")", parse = TRUE)
+
+leg <- OTUBLAST_hits_t_all_long %>% 
+    filter(bodypart == "leg") %>% 
+    ggplot(. , aes(x = shannon, y = OTU_hits, group = PCR, colour = PCR)) +
+    geom_point() +
+    ylim(50, 250) +
+    geom_smooth(method = "lm", se = FALSE) +
+    labs(x = "Evenness (Shannon diversity)", 
+         y = "Number of OTUs matched to a Reference") +
+    theme_cowplot() +
+    facet_wrap(~bodypart) +
+    scale_colour_viridis_d(option = "cividis") +
+    theme(axis.title.y = element_blank()) +
+    annotate("text", x = 4.22, y = 70, label = "hlll") +
+    annotate("text", x = 4.3, y = 120, label = "Hhml") +
+    annotate("text", x = 5.1, y = 190, label = "hhhl") +
+    annotate("text", x = 5.25, y = 100, label = "mmmm") +
+    annotate("text", x = 4.6, y = 250, label = "paste(\"p<0.001, \", italic(marginal_R) ^ 2, \" = 37.3\")", parse = TRUE)   
+
+body + leg
+```
+
+########################################################################
+Evenness analysis, Figure S_QUANT
+########################################################################
+Using begumfilter "Filter_min2PCRs_min4copies" and PCR A
+The purpose is to see if OTU size (number of reads) predicts input DNA, measured two ways:  COI amplicon (from qPCR) and genomic DNA (from Biotek). We want to know if (1) the relationship is the same across different soups (it is not), and (2) the relationship is precise (no, a lot of noise). Note that this test is across-species quantification. 
+```{r}
+MTB_quant <- function(OTUBLASTqpcr) {
+    OTUBLASTqpcr %>% 
+    filter(!is.na(sseqid)) %>%  # remove drop-ins
+    filter(pident >= pident_threshold2) %>% # remove drop-ins
+    filter(!str_starts(sseqid, "P")) %>% # remove hits to positive ctrl
+    select(hlllleg, hlllbody, Hhmlleg, Hhmlbody, hhhlleg, hhhlbody, mmmmleg, mmmmbody,sseqid, starts_with("qPCR"), starts_with("Biotek")) %>% 
+    group_by(sseqid) %>% # group by MTBseq
+    summarise(
+        hlllleg_sum = sum(hlllleg), 
+        hlllbody_sum = sum(hlllbody), 
+        Hhmlleg_sum = sum(Hhmlleg), 
+        Hhmlbody_sum = sum(Hhmlbody),
+        hhhlleg_sum = sum(hhhlleg), 
+        hhhlbody_sum = sum(hhhlbody),
+        qPCR_hlll_leg = first(qPCR_hlll_leg),
+        Biotek_hlll_leg = first(Biotek_hlll_leg),
+        qPCR_hhhl_leg = first(qPCR_hhhl_leg),
+        Biotek_hhhl_leg = first(Biotek_hhhl_leg),
+        qPCR_Hhml_leg = first(qPCR_Hhml_leg),
+        Biotek_Hhml_leg = first(Biotek_Hhml_leg),
+        qPCR_hlll_body = first(qPCR_hlll_body),
+        Biotek_hlll_body = first(Biotek_hlll_body),
+        qPCR_hhhl_body = first(qPCR_hhhl_body),
+        Biotek_hhhl_body = first(Biotek_hhhl_body),
+        qPCR_Hhml_body = first(qPCR_Hhml_body),
+        Biotek_Hhml_body = first(Biotek_Hhml_body)
+        ) # sum reads per sseqid and take first sseqid input amts
+}
+
+OTUBLASTqpcrA <- MTB_quant(OTUBLASTqpcr$A)
+
+display.brewer.pal(7, "Set2")
+(colorvec <- brewer.pal(4, "Set2"))
+# "#8DD3C7" "#BEBADA" "#FB8072"
+
+p1 <- ggplot(OTUBLASTqpcrA) +
+    geom_point(aes(x=hlllbody_sum, y=qPCR_hlll_body), colour = colorvec[1]) +
+    geom_smooth(aes(x=hlllbody_sum, y=qPCR_hlll_body), method="lm", se=FALSE, colour = colorvec[1]) +
+    geom_point(aes(x=Hhmlbody_sum, y=qPCR_Hhml_body), colour = colorvec[2]) +
+    geom_smooth(aes(x=Hhmlbody_sum, y=qPCR_Hhml_body), method="lm", se=FALSE, colour = colorvec[2]) +
+    geom_point(aes(x=hhhlbody_sum, y=qPCR_hhhl_body), colour = colorvec[3]) +
+    geom_smooth(aes(x=hhhlbody_sum, y=qPCR_hhhl_body), method="lm", se=FALSE, colour = colorvec[3]) +
+    theme_cowplot() +
+    easy_labs(x="OTU size (number of reads)", 
+         y="COI amplicon concentration (ng/µl)",
+         subtitle = "body") +
+    easy_move_legend(to = "none") +
+    annotate("text", x = 1650, y =40, label = "hlll", color = colorvec[1]) +
+    annotate("text", x = 3000, y = 220, label = "Hhml", color = colorvec[2]) +
+    annotate("text", x = 1800, y = 60, label = "hhhl", color = colorvec[3]) +
+    easy_x_axis_title_size(11) +
+    easy_y_axis_title_size(11)
+
+
+p2 <- ggplot(OTUBLASTqpcrA) +
+    geom_point(aes(x=hlllbody_sum, y=Biotek_hlll_body), colour = colorvec[1]) +
+    geom_smooth(aes(x=hlllbody_sum, y=Biotek_hlll_body), method="lm", se=FALSE, colour = colorvec[1]) +
+    geom_point(aes(x=Hhmlbody_sum, y=Biotek_Hhml_body), colour = colorvec[2]) +
+    geom_smooth(aes(x=Hhmlbody_sum, y=Biotek_Hhml_body), method="lm", se=FALSE, colour = colorvec[2]) +
+    geom_point(aes(x=hhhlbody_sum, y=Biotek_hhhl_body), colour = colorvec[3]) +
+    geom_smooth(aes(x=hhhlbody_sum, y=Biotek_hhhl_body), method="lm", se=FALSE, colour = colorvec[3]) +
+    theme_cowplot() +
+    easy_labs(x = "OTU size (number of reads)", 
+         y = "genomic DNA input (ng/µl)",
+         subtitle = "body") +
+    easy_move_legend(to = "none") +
+    easy_x_axis_title_size(11) +
+    easy_y_axis_title_size(11)
+
+# p1 + p2
+
+p3 <- ggplot(OTUBLASTqpcrA) +
+    geom_point(aes(x=hlllleg_sum, y=qPCR_hlll_leg), colour = colorvec[1]) +
+    geom_smooth(aes(x=hlllleg_sum, y=qPCR_hlll_leg), method="lm", se=FALSE, colour = colorvec[1]) +
+    geom_point(aes(x=Hhmlleg_sum, y=qPCR_Hhml_leg), colour = colorvec[2]) +
+    geom_smooth(aes(x=Hhmlleg_sum, y=qPCR_Hhml_leg), method="lm", se=FALSE, colour = colorvec[2]) +
+    geom_point(aes(x=hhhlleg_sum, y=qPCR_hhhl_leg), colour = colorvec[3]) +
+    geom_smooth(aes(x=hhhlleg_sum, y=qPCR_hhhl_leg), method="lm", se=FALSE, colour = colorvec[3]) +
+    theme_cowplot() +
+    easy_labs(x="OTU size (number of reads)", 
+         y="COI amplicon concentration (ng/µl)",
+         subtitle = "leg") +
+    easy_move_legend(to = "none") +
+    easy_x_axis_title_size(11) +
+    easy_y_axis_title_size(11)
+
+p4 <- ggplot(OTUBLASTqpcrA) +
+    geom_point(aes(x=hlllleg_sum, y=Biotek_hlll_leg), colour = colorvec[1]) +
+    geom_smooth(aes(x=hlllleg_sum, y=Biotek_hlll_leg), method="lm", se=FALSE, colour = colorvec[1]) +
+    geom_point(aes(x=Hhmlleg_sum, y=Biotek_Hhml_leg), colour = colorvec[2]) +
+    geom_smooth(aes(x=Hhmlleg_sum, y=Biotek_Hhml_leg), method="lm", se=FALSE, colour = colorvec[2]) +
+    geom_point(aes(x=hhhlleg_sum, y=Biotek_hhhl_leg), colour = colorvec[3]) +
+    geom_smooth(aes(x=hhhlleg_sum, y=Biotek_hhhl_leg), method="lm", se=FALSE, colour = colorvec[3]) +
+    theme_cowplot() +
+    easy_labs(x = "OTU size (number of reads)", 
+         y = "genomic DNA input (ng/µl)",
+         subtitle = "leg") +
+    easy_move_legend(to = "none") +
+    easy_x_axis_title_size(11) +
+    easy_y_axis_title_size(11)
+
+# p3 + p4
+
+(p1 + p2) / (p3 + p4)
+```
+
+
+########################################################################
+Taxonomic dropout analysis, Figure Metacoder
+########################################################################
+
+```{r}
+
+```
+
+
+
+Unused code
+# procrustes analyses (A to F only)
+```{r, eval=FALSE}
+protestAB <- protest(ordinations$A, ordinations$B)
+protestAC <- protest(ordinations$A, ordinations$C)
+protestAD <- protest(ordinations$A, ordinations$D)
+protestAE <- protest(ordinations$A, ordinations$E)
+protestAF <- protest(ordinations$A, ordinations$F)
+protestBC <- protest(ordinations$B, ordinations$C)
+protestBD <- protest(ordinations$B, ordinations$D)
+protestBE <- protest(ordinations$B, ordinations$E)
+protestBF <- protest(ordinations$B, ordinations$F)
+protestCD <- protest(ordinations$C, ordinations$D)
+protestCE <- protest(ordinations$C, ordinations$E)
+protestCF <- protest(ordinations$C, ordinations$F)
+protestDE <- protest(ordinations$D, ordinations$E)
+protestDF <- protest(ordinations$D, ordinations$F)
+protestEF <- protest(ordinations$E, ordinations$F)
+
+# plot the procrustes superimposition graphs.
+par(mfrow=c(4,4))
+plot(protestAB, main = "A vs B")
+plot(protestAC, main = "A vs C")
+plot(protestAD, main = "A vs D")
+plot(protestAE, main = "A vs E")
+plot(protestAF, main = "A vs F")
+plot(protestBC, main = "B vs C")
+plot(protestBD, main = "B vs D")
+plot(protestBE, main = "B vs E")
+plot(protestBF, main = "B vs F")
+plot(protestCD, main = "C vs D")
+plot(protestCE, main = "C vs E")
+plot(protestCF, main = "C vs F")
+plot(protestDE, main = "D vs E")
+plot(protestDF, main = "D vs F")
+plot(protestEF, main = "E vs F")
+par(mfrow=c(1,1))
+
+# store correlation coefficients from Protest, omitting ones with A2
+pairwise <- c("AB", "AC", "AD", "AE", "AF", "BC", "BD", "BE", "BF", "CD", "CE", "CF", "DE", "DF", "EF")
+
+# store correlation coefficients from Protest
+correlations <- 0
+j=0
+for (i in pairwise) {
+  j=j+1
+  correlations[j] <- get(paste0("protest", i))[["scale"]] # correlation coefficient from protest 
+}
+
+correlations
+length(correlations)
+mean(correlations)
+sd(correlations)/sqrt(length(correlations))
+```
+
+# procrustes analyses (A to E comparing to G & H only)
+```{r, eval=FALSE}
+protestAG <- protest(ordinations$A, ordinations$G)
+protestBG <- protest(ordinations$B, ordinations$G)
+protestCG <- protest(ordinations$C, ordinations$G)
+protestDG <- protest(ordinations$D, ordinations$G)
+protestEG <- protest(ordinations$E, ordinations$G)
+protestFG <- protest(ordinations$F, ordinations$G)
+protestHG <- protest(ordinations$H, ordinations$G)
+protestAH <- protest(ordinations$A, ordinations$H)
+protestBH <- protest(ordinations$B, ordinations$H)
+protestCH <- protest(ordinations$C, ordinations$H)
+protestDH <- protest(ordinations$D, ordinations$H)
+protestEH <- protest(ordinations$E, ordinations$H)
+protestFH <- protest(ordinations$F, ordinations$H)
+protestGH <- protest(ordinations$G, ordinations$H)
+
+# plot the procrustes superimposition graphs.
+par(mfrow=c(4,4))
+plot(protestAG, main = "A vs G")
+plot(protestBG, main = "B vs G")
+plot(protestCG, main = "C vs G")
+plot(protestDG, main = "D vs G")
+plot(protestEG, main = "E vs G")
+plot(protestFG, main = "F vs G")
+plot(protestHG, main = "H vs G")
+plot(protestAH, main = "A vs H")
+plot(protestBH, main = "B vs H")
+plot(protestCH, main = "C vs H")
+plot(protestDH, main = "D vs H")
+plot(protestEH, main = "E vs H")
+plot(protestFH, main = "F vs H")
+plot(protestGH, main = "G vs H")
+par(mfrow=c(1,1))
+
+# store correlation coefficients from Protest
+pairwise <- c("AG", "BG", "CG", "DG", "EG", "FG", "HG", "AH", "BH", "CH", "DH", "EH", "FH", "GH")
+
+# store correlation coefficients from Protest
+correlations <- 0
+j=0
+for (i in pairwise) {
+  j=j+1
+  correlations[j] <- get(paste0("protest", i))[["scale"]] # correlation coefficient from protest 
+}
+
+correlations
+length(correlations)
+mean(correlations)
+sd(correlations)/sqrt(length(correlations))
+```
