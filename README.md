@@ -30,4 +30,4 @@ d) analyse whether OTU size contains abundance information
 1. Tag-bias analysis  
 a) Exploit the replicate PCRs using same and different tags and compare for differences in community composition  
 
-Note that the Begum method works by independently PCRing each sample 3 times, us assumes that each set of samples (a 96-well plate) has been separately PCRd three times.  DAME keeps reads that appear in ≥M PCRs (e.g. ≥2 of 3 total PCRs) and in each PCR appears in ≥N copies (e.g. ≥4 copies per PCR). DAMe also works best if both the forward and reverse reads have been tagged using the same tag (what we call 'twin tags').
+Note that the Begum method works by independently PCRing each sample 3 times.  Begum filters out erroneous reads by keeping only those that appear in ≥M PCRs (e.g. ≥2 of 3 total PCRs) with more than ≥N copies per PCR (e.g. ≥4 copies per PCR). Begum also works best if both the forward and reverse reads have been tagged using the same tag (what we call 'twin tags').
