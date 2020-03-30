@@ -227,7 +227,7 @@ pmap(list(ordinations, plottitle, envs), ordinationplot)
 par(mfrow=c(1,1))
 ```
 
-# plot an ordination from just one experiment (PCR A). This figure is used for "Figure NMDS". 
+plot an ordination from just one experiment (PCR A). This figure is used for "Figure NMDS". 
 ```{r ordination and plot ordination from one pcr Figure NMDS, eval=FALSE}
 OTUminsize_one <- OTUminsize["A"]
 
@@ -555,7 +555,7 @@ Evenness analysis, Figure S_QUANT
 ########################################################################
 Using begumfilter "Filter_min2PCRs_min4copies" and PCR A
 The purpose is to see if OTU size (number of reads) predicts input DNA, measured two ways:  COI amplicon (from qPCR) and genomic DNA (from Biotek). We want to know if (1) the relationship is the same across different soups (it is not), and (2) the relationship is precise (no, a lot of noise). Note that this test is across-species quantification. 
-```{r}
+```{r figure S_QUANT}
 MTB_quant <- function(OTUBLASTqpcr) {
     OTUBLASTqpcr %>% 
     filter(!is.na(sseqid)) %>%  # remove drop-ins
@@ -664,17 +664,104 @@ p4 <- ggplot(OTUBLASTqpcrA) +
 
 
 ########################################################################
-Taxonomic dropout analysis, Figure Metacoder
+Taxonomic amplification bias, Figure METACODER
 ########################################################################
+Filter_min2PCRs_min4copies and mmmmbody
+```{r metacoder}
+# create tibble of the PCRs to compare (A, C, E, F, G) (omitting PCR replicates)
+soup_mmmm <- tribble(
+  ~Soups,   ~PCR_condition,   ~Description,   ~DNA_Source,
+"A",   "oTa_oC",   "A_optTa_optCyc",   "mmmmbody",
+"C",   "hTa_oC",   "C_highTa_optCyc",   "mmmmbody",
+"E",   "oTa_lC",   "E_optTa_loCyc",   "mmmmbody",
+"F",   "oTa_hC",   "F_optTa_hiCyc",   "mmmmbody",
+"G",   "TD",   "G_Touchdown",   "mmmmbody"
+)
 
-```{r}
+# read in taxonomies assigned to ref sequences by GBIF website: https://www.gbif.org/tools/sequence-id
+gbiftaxMTB <- read_csv(file.path("..", "data", "MTB", "blastresult_20200330.csv")) %>% 
+    select(occurrenceId, matchType, classification) %>% 
+    separate(classification, into = c("kingdom", "phylum", "class", "order", "family", "genus", "species"), sep = "_", remove = FALSE)
 
+# reformat OTUBLAST list
+OTUBLASTtax <- OTUBLAST[c("A","C","E","F","G")] # keep only A,C,E,F,G
+OTUBLASTselect <- function(x){
+    x %>% select(mmmmbody, sseqid)
+}
+OTUBLASTtax <- map_dfr(OTUBLASTtax, OTUBLASTselect, .id = "PCR")
+OTUBLASTtax_summ <- OTUBLASTtax %>% 
+    filter(!is.na(sseqid)) %>% 
+    group_by(PCR, sseqid) %>% 
+    summarise(
+        mmmmbody = sum(mmmmbody)
+    )
+OTUBLASTtax_wide <- OTUBLASTtax_summ %>% 
+    pivot_wider(names_from = "PCR", values_from = "mmmmbody", values_fill = list(mmmmbody = 0))
+
+otu_mmmm <- OTUBLASTtax_wide %>% 
+    left_join(gbiftaxMTB, by = c("sseqid" = "occurrenceId")) %>% 
+    select(-matchType, -species) %>% 
+    rowwise() %>% 
+    mutate(
+        sumreads = sum(A,C,E,F,G)
+    ) %>% 
+    filter(sumreads > 0) %>% 
+    select(-sumreads)
+
+# metacoder heat tree
+# parse the taxonomic information using a parser from {taxa}
+obj <- parse_tax_data(otu_mmmm, 
+       class_cols = c("kingdom", "phylum", "class", "order", "family", "genus"), class_sep = "_", named_by_rank = TRUE)
+
+# obj <- parse_tax_data(otu_mmmm, class_cols = "classification", class_sep = "_")
+print(obj)
+# This returns a taxmap object. The taxmap class is designed to store any number of tables, lists, or vectors associated with taxonomic information and facilitate manipulating the data in a cohesive way. 
+
+# accounting for uneven sampling
+obj$data$tax_data <- calc_obs_props(obj, "tax_data")
+print(obj)
+
+# Getting per-taxon information
+# Currently, we have values for the abundance of each OTU, not each taxon. To get information on the taxa, we can sum the abundance per-taxon like so:
+obj$data$tax_abund <- calc_taxon_abund(obj, "tax_data")
+print(obj)
+
+# Note that there is now an additional table with one row per taxon.
+# We can also easily calculate the number of samples have reads for each taxon:
+obj$data$tax_occ <- calc_n_samples(obj, "tax_abund", groups = soup_mmmm$PCR_condition)
+print(obj)
+
+# Plotting taxonomic data
+# Now that we have per-taxon information, we can plot the information using heat trees. The code below plots the number of samples that have reads for each taxon. It also plots the number of OTUs assigned to each taxon in the overall dataset.
+heat_tree(obj, node_label = obj$taxon_names(),
+          node_size = obj$n_obs(),
+          node_color = obj$data$tax_occ$oTa_oC, 
+          node_size_axis_label = "OTU count",
+          node_color_axis_label = "Samples with reads")
+
+
+# Compare PCR conditions
+obj$data$diff_table <- compare_groups(obj, dataset = "tax_abund",
+                                      cols = soup_mmmm$Soups,
+                                      groups = soup_mmmm$Description) # PCR_condition
+print(obj$data$diff_table)
+heat_tree_matrix(obj,
+                 data = "diff_table",
+                 node_size = n_obs,
+                 node_label = taxon_names,
+                 node_color = log2_median_ratio,
+                 node_color_range = diverging_palette(),
+                 node_color_trans = "linear",
+                 node_color_interval = c(-3, 3),
+                 edge_color_interval = c(-3, 3),
+                 node_size_axis_label = "Number of OTUs",
+                 node_color_axis_label = "Log2 ratio median proportions")
 ```
 
 
 
 Unused code
-# procrustes analyses (A to F only)
+procrustes analyses (A to F only)
 ```{r, eval=FALSE}
 protestAB <- protest(ordinations$A, ordinations$B)
 protestAC <- protest(ordinations$A, ordinations$C)
@@ -728,7 +815,7 @@ mean(correlations)
 sd(correlations)/sqrt(length(correlations))
 ```
 
-# procrustes analyses (A to E comparing to G & H only)
+procrustes analyses (A to E comparing to G & H only)
 ```{r, eval=FALSE}
 protestAG <- protest(ordinations$A, ordinations$G)
 protestBG <- protest(ordinations$B, ordinations$G)

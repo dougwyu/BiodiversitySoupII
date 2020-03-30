@@ -350,6 +350,6 @@ cat ${HOMEFOLDER}${SEQS}BegumFilters # should show the three filter settings
 parallel cp ${HOMEFOLDER}${SEQS}folder*/{1}_*/table_BioSoupII_97_lulu_Arthropoda_*.txt ${HOMEFOLDER}analysis/{1}/ :::: ${HOMEFOLDER}${SEQS}BegumFilters
 parallel cp ${HOMEFOLDER}${SEQS}folder*/{1}_*/table_BioSoupII_*_Arthropoda.blastnMTB.txt ${HOMEFOLDER}analysis/{1}/ :::: ${HOMEFOLDER}${SEQS}BegumFilters
 parallel cp ${HOMEFOLDER}${SEQS}folder*/{1}_*/table_BioSoupII_*_Arthropoda.vsearchMTB.txt ${HOMEFOLDER}analysis/{1}/ :::: ${HOMEFOLDER}${SEQS}BegumFilters
-
+parallel cp ${HOMEFOLDER}${SEQS}folder*/{1}_*/FilteredReads_derep_sorted_nonchimeras_vsearch97_sorted_lulu_Arthropoda_*.out ${HOMEFOLDER}analysis/{1}/ :::: ${HOMEFOLDER}${SEQS}BegumFilters
 # END
 # Go to 3_SoupII_ecological_analysis.Rmd and 4_SoupII_singlepools_OTU_table.Rmd
