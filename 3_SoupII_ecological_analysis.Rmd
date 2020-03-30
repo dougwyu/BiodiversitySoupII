@@ -672,8 +672,8 @@ Filter_min2PCRs_min4copies and mmmmbody
 soup_mmmm <- tribble(
   ~Soups,   ~PCR_condition,   ~Description,   ~DNA_Source,
 "A",   "oTa_oC",   "A_optTa_optCyc",   "mmmmbody",
-"C",   "hTa_oC",   "C_highTa_optCyc",   "mmmmbody",
 "E",   "oTa_lC",   "E_optTa_loCyc",   "mmmmbody",
+"C",   "hTa_oC",   "C_highTa_optCyc",   "mmmmbody",
 "F",   "oTa_hC",   "F_optTa_hiCyc",   "mmmmbody",
 "G",   "TD",   "G_Touchdown",   "mmmmbody"
 )
