@@ -289,6 +289,14 @@ names(blastmtb) <- foldervec
 
 ```{r import MTB DNA input amt table}
 # read in MTB_REF file (updated on 20171129 to include the input DNA amounts and morphological ID to order level)
+MTB_AllInputRefSeqs <- file.path("..", "data", "MTB", "S2_MTB_AllInputRefSeqs_20200401.xlsx")
+
+MTB_excel <- read_excel(path = MTB_AllInputRefSeqs, sheet = "MTB_RefSeqs_DNAconc", col_types = c("text","numeric","numeric","numeric","numeric","numeric","numeric","numeric","numeric","numeric","numeric","numeric","numeric","numeric","numeric","numeric","numeric", "text","text"), na = "NA")
+```
+
+```{r import MTB DNA input amt table OLD, eval = FALSE, include = FALSE}
+# old excel file
+# read in MTB_REF file (updated on 20171129 to include the input DNA amounts and morphological ID to order level)
 MTB_AllInputRefSeqs <- file.path("..", "data", "MTB", "S2_MTB_AllInputRefSeqs_20180321.xlsx")
 
 MTB_excel <- read_excel(path = MTB_AllInputRefSeqs, sheet = "RDP_midori", col_types = c("text","numeric","numeric","numeric","numeric","numeric","numeric","numeric","numeric","numeric","numeric","numeric","numeric","numeric","numeric","numeric","numeric", "text","text","skip","skip","skip","skip","skip","skip","skip","skip","skip","skip","skip","skip","skip","skip","skip","skip","skip"))
