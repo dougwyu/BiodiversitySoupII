@@ -94,7 +94,7 @@ phyloseq filtering by OTU size. This step removes "small" OTUs, which are probab
 Strategy:  survey the OTU tables to decide on a common min OTU size. Then apply a function to all OTU tables in the otu list.
 ```{r phyloseq analysis, eval=FALSE}
 # choose a table
-communityAll_t <- otu$H
+communityAll_t <- otu$A
 
 # Inspect the control sample (PC, PCR, xb) OTUs and filter the OTU table.  
 communityAll_t <- communityAll_t %>% arrange(desc(PC))
@@ -287,19 +287,12 @@ names(blastmtb) <- foldervec
 # individual otu tables can be referred to as blastout$folder: blastout$A
 ```
 
+Import the input amounts per soup per ref species, qPCR for COI and Biotek for genomic DNA
 ```{r import MTB DNA input amt table}
 # read in MTB_REF file (updated on 20171129 to include the input DNA amounts and morphological ID to order level)
 MTB_AllInputRefSeqs <- file.path("..", "data", "MTB", "S2_MTB_AllInputRefSeqs_20200401.xlsx")
 
 MTB_excel <- read_excel(path = MTB_AllInputRefSeqs, sheet = "MTB_RefSeqs_DNAconc", col_types = c("text","numeric","numeric","numeric","numeric","numeric","numeric","numeric","numeric","numeric","numeric","numeric","numeric","numeric","numeric","numeric","numeric", "text","text"), na = "NA")
-```
-
-```{r import MTB DNA input amt table OLD, eval = FALSE, include = FALSE}
-# old excel file
-# read in MTB_REF file (updated on 20171129 to include the input DNA amounts and morphological ID to order level)
-MTB_AllInputRefSeqs <- file.path("..", "data", "MTB", "S2_MTB_AllInputRefSeqs_20180321.xlsx")
-
-MTB_excel <- read_excel(path = MTB_AllInputRefSeqs, sheet = "RDP_midori", col_types = c("text","numeric","numeric","numeric","numeric","numeric","numeric","numeric","numeric","numeric","numeric","numeric","numeric","numeric","numeric","numeric","numeric", "text","text","skip","skip","skip","skip","skip","skip","skip","skip","skip","skip","skip","skip","skip","skip","skip","skip","skip"))
 ```
 
 
