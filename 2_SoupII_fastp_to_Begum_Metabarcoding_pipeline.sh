@@ -130,10 +130,10 @@ cd ${HOMEFOLDER}${SEQS} # cd into the sequence folder
 parallel -j 4 "cd ${HOMEFOLDER}${SEQS}; python2 ${BEGUM}Begum.py filter -d folder{1} -i folder{1}/PCR_{1} -s ${HOMEFOLDER}data/PSinfo_biosoupII_COI{1}.txt -p 0.3 -m 1 -l 300 -o Filter_min1PCRs_min1copies" ::: A B C D E F G H
 
 # filter 2 PCRs 4 COPIES
-parallel -j 4 "cd ${HOMEFOLDER}${SEQS}; python ${BEGUM}Begum.py filter -d folder{1} -i folder{1}/PCR_{1} -s ${HOMEFOLDER}data/PSinfo_biosoupII_COI{1}.txt -p 0.6 -m 4 -l 300 -o Filter_min2PCRs_min4copies" ::: A B C D E F G H
+parallel -j 4 "cd ${HOMEFOLDER}${SEQS}; python2 ${BEGUM}Begum.py filter -d folder{1} -i folder{1}/PCR_{1} -s ${HOMEFOLDER}data/PSinfo_biosoupII_COI{1}.txt -p 0.6 -m 4 -l 300 -o Filter_min2PCRs_min4copies" ::: A B C D E F G H
 
 # filter 3 PCRs 3 COPIES
-parallel -j 4 "cd ${HOMEFOLDER}${SEQS}; python ${BEGUM}Begum.py filter -d folder{1} -i folder{1}/PCR_{1} -s ${HOMEFOLDER}data/PSinfo_biosoupII_COI{1}.txt -p 0.9 -m 3 -l 300 -o Filter_min3PCRs_min3copies" ::: A B C D E F G H
+parallel -j 4 "cd ${HOMEFOLDER}${SEQS}; python2 ${BEGUM}Begum.py filter -d folder{1} -i folder{1}/PCR_{1} -s ${HOMEFOLDER}data/PSinfo_biosoupII_COI{1}.txt -p 0.9 -m 3 -l 300 -o Filter_min3PCRs_min3copies" ::: A B C D E F G H
 
 cd ${HOMEFOLDER}${SEQS} # cd into the sequence folder
 
@@ -155,9 +155,9 @@ parallel mv folder{1}/{2}.fna folder{1}/{2}_{1}/ ::: A B C D E F G H :::: BegumF
 # 4. Convert Begum filter output files to usearch header format. The output fasta files (*.fna) have been filtered for erroneous sequences (at the different Begum stringency levels), and we now need one function from the original DAMe pipeline to put the number of sequences back into the header line. (e.g. '>mmmmbody Tag9.Tag9_Tag27.Tag27_Tag34.Tag34 61_27_24' gets converted to '>mmmmbody;size=112'). We plan to move this function to Begum.
 
 cd ${HOMEFOLDER}${SEQS} # cd into the sequence folder
-python2 ${DAME}convertToUSearch.py -h
+python3 ${DAME}convertToUSearch.py -h
 parallel -k "cd folder{1}/{2}_{1}; \
-    python2 ${DAME}convertToUSearch.py -i {2}.fna -lmin 300 -lmax 330 -u; \
+    python3 ${DAME}convertToUSearch.py -i {2}.fna -lmin 300 -lmax 330 -u; \
     seqkit replace -is -p \"n\" -r \"\" FilteredReads.forusearch.fna > FilteredReads.forusearch_noN.fna; \
     cd ${HOMEFOLDER}${SEQS}" ::: A B C D E F G H :::: BegumFilters
     # remove the Ns from the ends of the sequences put there by ${DAME}convertToUSearch.py
