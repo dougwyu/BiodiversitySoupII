@@ -31,6 +31,7 @@ library(lme4)
 library(MuMIn)
 library(ggeasy)
 library(RColorBrewer)
+library(gt)
 library(envDocument)
 library(conflicted)
   conflict_prefer("mutate", "dplyr", quiet = TRUE)
@@ -62,8 +63,8 @@ Import tables, join, and remove small OTUs using phyloseq rarefaction
 Import OTU tables. These tables include only Arthropoda-assigned OTUs. 
 ```{r begumfilter selection}
 # begumfilter <- "Filter_min1PCRs_min1copies"
-begumfilter <- "Filter_min2PCRs_min4copies"
-# begumfilter <- "Filter_min3PCRs_min3copies"
+# begumfilter <- "Filter_min2PCRs_min4copies"
+begumfilter <- "Filter_min3PCRs_min3copies"
 ```
 
 ```{r import OTU tables}
@@ -463,6 +464,66 @@ Table_DROPS_97 <- bind_rows(OTUBLAST_all_97_Filter_min1PCRs_min1copies, OTUBLAST
     select(soup, begumfilter, metric, everything())
 
 # write_tsv(Table_DROPS_97, file.path("..", "paper", "Table_DROPS_97.txt"))
+```
+
+########################################################################
+Table DROPS, test code using {gt} package
+########################################################################
+```{r, eval=FALSE, include=FALSE}
+Table_DROPS_97
+Table_DROPS_97 %>% 
+    gt(
+        rowname_col = "metric",
+        groupname_col = "begumfilter"
+    ) %>% 
+    tab_spanner(
+    label = "PCR Conditions",
+    columns = vars(`A`, `B`, `C`, `D`, `E`, `F`, `G`, `H`)
+  ) %>%
+  fmt_number(
+    columns = vars(`A`, `B`, `C`, `D`, `E`, `F`, `G`, `H`),
+    decimals = 0,
+    use_seps = TRUE
+  )
+
+
+
+# Get vectors of 2-letter country codes for
+# each region of Oceania
+Australasia <- c("AU", "NZ")
+Melanesia <- c("NC", "PG", "SB", "VU")
+Micronesia <- c("FM", "GU", "KI", "MH", "MP", "NR", "PW")
+Polynesia <- c("PF", "WS", "TO", "TV")
+
+# Create a gt table based on a preprocessed `countrypops`
+countrypops %>%
+  dplyr::filter(country_code_2 %in% c(
+    Australasia, Melanesia, Micronesia, Polynesia)
+  ) %>%
+  dplyr::filter(year %in% c(1995, 2005, 2015)) %>%
+  dplyr::mutate(region = case_when(
+    country_code_2 %in% Australasia ~ "Australasia",
+    country_code_2 %in% Melanesia ~ "Melanesia",
+    country_code_2 %in% Micronesia ~ "Micronesia",
+    country_code_2 %in% Polynesia ~ "Polynesia",
+  )) %>%
+  tidyr::spread(key = year, value = population) %>%
+  dplyr::arrange(region, desc(`2015`)) %>%
+  dplyr::select(-starts_with("country_code")) %>%
+  gt(
+    rowname_col = "country_name",
+    groupname_col = "region"
+  ) %>%
+  tab_header(title = "Populations of Oceania's Countries in 1995, 2005, and 2015") %>%
+  tab_spanner(
+    label = "Total Population",
+    columns = vars(`1995`, `2005`, `2015`)
+  ) %>%
+  fmt_number(
+    columns = vars(`1995`, `2005`, `2015`),
+    decimals = 0,
+    use_seps = TRUE
+  )
 ```
 
 ########################################################################
