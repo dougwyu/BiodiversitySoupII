@@ -1,6 +1,27 @@
 # Biodiversity Soup II paper
 
-See Wiki page for assumed folder structure.  
+See Wiki page for required folder structure.  
+
+This folder contains all the files created after the BioSoupII pipeline has finished creating OTU tables and assigning taxonomies. If you want to run the pipeline from scratch, remove the following folders:
+
+cd BiodiversitySoupII_repo/
+rm -rf analysis/Filter_min1PCRs_min1copies/
+rm -rf analysis/Filter_min2PCRs_min4copies/
+rm -rf analysis/Filter_min3PCRs_min3copies/
+rm -rf analysis/singlepools/
+rm data/seqs/BegumFilters
+rm data/seqs/mergedtrimmed_read_counts.txt
+rm data/seqs/samplelist.txt
+rm -rf data/seqs/fastp_outputs/
+rm -rf data/seqs/folder{A,B,C,D,E,F,G,H}/Filter_min1PCRs_min1copies_{A,B,C,D,E,F,G,H}
+rm -rf data/seqs/folder{A,B,C,D,E,F,G,H}/Filter_min2PCRs_min4copies_{A,B,C,D,E,F,G,H}
+rm -rf data/seqs/folder{A,B,C,D,E,F,G,H}/Filter_min3PCRs_min3copies_{A,B,C,D,E,F,G,H}
+rm -rf data/seqs/folder{A,B,C,D,E,F,G,H}/PCR_{A,B,C,D,E,F,G,H}_pool{1,2,3}.summaryCounts
+rm -rf data/seqs/folder{A,B,C,D,E,F,G,H}/PCR_{A,B,C,D,E,F,G,H}_pool{1,2,3}.tagInfo
+rm -rf data/seqs/folder{A,B,C,D,E,F,G,H}/pool{1,2,3}/*_350K_mergedtrimmed.fq.gz
+
+
+
 
 **These are the scripts used in our Biodiversity Soup II manuscript.**
 
