@@ -63,8 +63,8 @@ Import tables, join, and remove small OTUs using phyloseq rarefaction
 Import OTU tables. These tables include only Arthropoda-assigned OTUs. 
 ```{r begumfilter selection}
 # begumfilter <- "Filter_min1PCRs_min1copies"
-# begumfilter <- "Filter_min2PCRs_min4copies"
-begumfilter <- "Filter_min3PCRs_min3copies"
+begumfilter <- "Filter_min2PCRs_min4copies"
+# begumfilter <- "Filter_min3PCRs_min3copies"
 ```
 
 ```{r import OTU tables}
