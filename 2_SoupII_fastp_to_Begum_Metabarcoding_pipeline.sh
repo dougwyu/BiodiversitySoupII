@@ -8,24 +8,29 @@ set -o pipefail
 ##########################################################################################################
 ###########################################################################################################
 
-# using Begum: http://github.com/shyamsg/Begum
-# $HOMEFOLDER is your folder holding your scripts, data, and output folders
-
-# fastq files in $HOMEFOLDER/data/seqs/
-# Begum input files in $HOMEFOLDER/data/
-# analysis outputs in $HOMEFOLDER/analysis/
-
+# set clustering and taxonomic assignment parameters
 OTUSIM=97 # OTU similarity in percentage (0-100, e.g. 97)
 echo "OTU similarity percentage is" ${OTUSIM}"%." #
 ARTHMINPROB=0.8 # minimum boostrap support of assignment to Arthropoda for vsearch --sintax
-HOMEFOLDER="/Users/Negorashi2011/Xiaoyangmiseqdata/BiodiversitySoupII/"  # do not have a ~ in the path
+
+# set pathnames
+
+# edit $HOMEFOLDER to your folder holding your scripts, data, and output folders
+HOMEFOLDER="/Users/Negorashi2011/Xiaoyangmiseqdata/BiodiversitySoupII_repo/"  # do not have a ~ in the path
 echo "Home folder is" ${HOMEFOLDER}
+
+# set
+# fastq files in $HOMEFOLDER/data/seqs/
+# analysis outputs in $HOMEFOLDER/analysis/
 SEQS="data/seqs/"
 ANALYSIS="analysis/"
+# Begum parameter input files in $HOMEFOLDER/data/
+
+# set DAMe and Begum pathnames and check that they work
 DAME="/usr/local/bin/DAMe/bin/" # pathname for the binaries on DAMe
     echo "The DAMe binaries are in" ${DAME}
-    python3 --version # 3.5.4
-    python3 ${DAME}convertToUSearch.py -h
+    python3 --version # 3.7.6
+    python3 ${DAME}convertToUSearch.py -h # should see help
 BEGUM="/Users/Negorashi2011/src/Begum/src/" # pathname for the binaries on Begum
     echo "The Begum binaries are in" ${BEGUM}
     python2 --version # 2.7.17
@@ -33,6 +38,7 @@ BEGUM="/Users/Negorashi2011/src/Begum/src/" # pathname for the binaries on Begum
     python2 ${BEGUM}Begum.py filter -h
 
 cd ${HOMEFOLDER}${SEQS} # cd into the sequence folder
+# confirm that you are in seqs/ folder
 
 #############################################################################################
 #### Pre-process fastq files:  adapter removal, trimming, merging, subsampling, moving to Begum folders
@@ -45,9 +51,11 @@ sample_names=($(cut -f 1 "${sample_info}" | uniq)) # convert variable to array
     echo ${sample_names[0]} # echo first array element
 echo "There are" "${#sample_names[@]}" "samples that will be processed:  " "${sample_names[@]}" # echo number of elements in the array
 
-# In the original April run, we observed that Tag27_Tag27 in PCRA_pool2 failed. We resequenced this sample in a November MiSeq run, and we now concatenate those sequences to the original April run fastq files. However, to make things fair, we first checked the number of seqs in the other samples in PCRA_pool2, and we subsampled the November run to a similar number before concatenating.
+# In the original April run, we observed that Tag27_Tag27 in PCRA_pool2 failed. We resequenced this sample in the November MiSeq run, and we now concatenate those sequences to the original April run fastq files. However, to make things fair, we first checked the number of seqs in the other samples in PCRA_pool2, and we subsampled the November run to a similar number before concatenating.
+# This has already been done. There is no need to run this code. It is here as documentation. 
     # mean number of totseqs in the April PCRApool2 was 31497 (not counting Tag27_Tag27, which failed)
-    # Tag27_Tag27 in the November PCRApool2 was 345853 totseqs:  31497/345853 = 9.1%
+    # Tag27_Tag27 in the November PCRApool2 was 345853 totseqs
+    # 31497/345853 = 9.1% # November run datasize needs to be reduced to 9.1% of its original size
 # use seqkit sample to reduce the November fastq to 9.1% of original size and concatenate to the April fastq
     # cd /Users/Negorashi2011/Xiaoyangmiseqdata/MiSeq_20171121/data/seqs
     # seqkit sample -s 100 -p 0.091 A2_S2_L001_R1_001.fastq.gz | gzip > A2_S2_9.1_L001_R1_001.fastq.gz
