@@ -3,7 +3,7 @@
 See Wiki page for required folder structure.  
 
 This folder contains all the files created after the BioSoupII pipeline has finished creating OTU tables and assigning taxonomies. If you want to run the pipeline from scratch, remove the following folders:  
-
+```
 cd BiodiversitySoupII_repo/  
 rm -rf analysis/Filter_min1PCRs_min1copies/  
 rm -rf analysis/Filter_min2PCRs_min4copies/  
@@ -19,7 +19,7 @@ rm -rf data/seqs/folder{A,B,C,D,E,F,G,H}/Filter_min3PCRs_min3copies_{A,B,C,D,E,F
 rm -rf data/seqs/folder{A,B,C,D,E,F,G,H}/PCR_{A,B,C,D,E,F,G,H}_pool{1,2,3}.summaryCounts  
 rm -rf data/seqs/folder{A,B,C,D,E,F,G,H}/PCR_{A,B,C,D,E,F,G,H}_pool{1,2,3}.tagInfo  
 rm -rf data/seqs/folder{A,B,C,D,E,F,G,H}/pool{1,2,3}/*_350K_mergedtrimmed.fq.gz  
-
+```
 
 
 
