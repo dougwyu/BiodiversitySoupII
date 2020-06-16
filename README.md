@@ -2,7 +2,7 @@
 
 See Wiki page for required folder structure.  
 
-This folder contains all the files created after the BioSoupII pipeline has finished creating OTU tables and assigning taxonomies. If you want to run the pipeline from scratch, remove the following folders:
+This folder contains all the files created after the BioSoupII pipeline has finished creating OTU tables and assigning taxonomies. If you want to run the pipeline from scratch, remove the following folders:  
 
 cd BiodiversitySoupII_repo/  
 rm -rf analysis/Filter_min1PCRs_min1copies/  
