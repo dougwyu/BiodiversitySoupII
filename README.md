@@ -4,26 +4,26 @@ See Wiki page for required folder structure.
 
 This folder contains all the files created after the BioSoupII pipeline has finished creating OTU tables and assigning taxonomies. If you want to run the pipeline from scratch, remove the following folders:
 
-cd BiodiversitySoupII_repo/
-rm -rf analysis/Filter_min1PCRs_min1copies/
-rm -rf analysis/Filter_min2PCRs_min4copies/
-rm -rf analysis/Filter_min3PCRs_min3copies/
-rm -rf analysis/singlepools/
-rm data/seqs/BegumFilters
-rm data/seqs/mergedtrimmed_read_counts.txt
-rm data/seqs/samplelist.txt
-rm -rf data/seqs/fastp_outputs/
-rm -rf data/seqs/folder{A,B,C,D,E,F,G,H}/Filter_min1PCRs_min1copies_{A,B,C,D,E,F,G,H}
-rm -rf data/seqs/folder{A,B,C,D,E,F,G,H}/Filter_min2PCRs_min4copies_{A,B,C,D,E,F,G,H}
-rm -rf data/seqs/folder{A,B,C,D,E,F,G,H}/Filter_min3PCRs_min3copies_{A,B,C,D,E,F,G,H}
-rm -rf data/seqs/folder{A,B,C,D,E,F,G,H}/PCR_{A,B,C,D,E,F,G,H}_pool{1,2,3}.summaryCounts
-rm -rf data/seqs/folder{A,B,C,D,E,F,G,H}/PCR_{A,B,C,D,E,F,G,H}_pool{1,2,3}.tagInfo
-rm -rf data/seqs/folder{A,B,C,D,E,F,G,H}/pool{1,2,3}/*_350K_mergedtrimmed.fq.gz
+cd BiodiversitySoupII_repo/  
+rm -rf analysis/Filter_min1PCRs_min1copies/  
+rm -rf analysis/Filter_min2PCRs_min4copies/  
+rm -rf analysis/Filter_min3PCRs_min3copies/  
+rm -rf analysis/singlepools/  
+rm data/seqs/BegumFilters  
+rm data/seqs/mergedtrimmed_read_counts.txt  
+rm data/seqs/samplelist.txt  
+rm -rf data/seqs/fastp_outputs/  
+rm -rf data/seqs/folder{A,B,C,D,E,F,G,H}/Filter_min1PCRs_min1copies_{A,B,C,D,E,F,G,H}  
+rm -rf data/seqs/folder{A,B,C,D,E,F,G,H}/Filter_min2PCRs_min4copies_{A,B,C,D,E,F,G,H}  
+rm -rf data/seqs/folder{A,B,C,D,E,F,G,H}/Filter_min3PCRs_min3copies_{A,B,C,D,E,F,G,H}  
+rm -rf data/seqs/folder{A,B,C,D,E,F,G,H}/PCR_{A,B,C,D,E,F,G,H}_pool{1,2,3}.summaryCounts  
+rm -rf data/seqs/folder{A,B,C,D,E,F,G,H}/PCR_{A,B,C,D,E,F,G,H}_pool{1,2,3}.tagInfo  
+rm -rf data/seqs/folder{A,B,C,D,E,F,G,H}/pool{1,2,3}/*_350K_mergedtrimmed.fq.gz  
 
 
 
 
-**These are the scripts used in our Biodiversity Soup II manuscript.**
+**These are the scripts used in our Biodiversity Soup II manuscript.**  
 
 **1_SoupII_software_install_on_macos_20191010.sh**  
 
@@ -54,4 +54,4 @@ d) analyse whether OTU size contains abundance information
 1. Tag-bias analysis  
 a) Exploit the replicate PCRs using same and different tags and compare for differences in community composition  
 
-Note that the Begum method works by independently PCRing each sample 3 times.  Begum filters out erroneous reads by keeping only those that appear in ≥M PCRs (e.g. ≥2 of 3 total PCRs) with more than ≥N copies per PCR (e.g. ≥4 copies per PCR). Begum also works best if both the forward and reverse reads have been tagged using the same tag (what we call 'twin tags').
+Note that the Begum method works by independently PCRing each sample 3 times.  Begum filters out erroneous reads by keeping only those that appear in ≥M PCRs (e.g. ≥2 of 3 total PCRs) with more than ≥N copies per PCR (e.g. ≥4 copies per PCR). Begum also works best if both the forward and reverse reads have been tagged using the same tag (what we call 'twin tags').  
