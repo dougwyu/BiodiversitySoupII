@@ -1,6 +1,6 @@
 This script creates all figures and tables except for the singlepool Tagbias figures. It continues after 2_SoupII_fastp_to_Begum_Metabarcoding_pipeline.sh moved OTU tables and MTB_Blast results to analysis/ folder. 
 
-```{r setup chunk, message=FALSE}
+```{r setup, message=FALSE}
 # copy the following into each script   
 knitr::opts_chunk$set(
 	message = FALSE,
