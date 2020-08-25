@@ -131,13 +131,14 @@ Filter_min2PCRs_min4copies: I set the minOTU size threshold to 5, since there is
 
 Filter_min3PCRs_min3copies: I set the minOTU size threshold to 5, since there is no vertical part of the curve.
 ```{r filter OTU tables for min OTU size and set 1-read cells to 0}
-threshold_otu_size <- 5
+threshold_otu_size <- 1
+set_one_read_cells_to <- 0
 
 minOTUsizefilter <- function(df){
     df <- df %>% select(-starts_with("PC"), -starts_with("xb")) # tidyverse
     df <- rotate_df(df, cn = TRUE) # sjmisc
     df <- df[, colSums(df) >= threshold_otu_size] # base R
-    df[df == 1] <- 0 # base R
+    df[df == 1] <- set_one_read_cells_to # base R
     df
 }
 
@@ -224,7 +225,7 @@ ordinations <- map(OTUminsize, ordination)
 plottitle <- names(ordinations)
 # plot ordinations, with jmds names as plot titles
 par(mfrow=c(2,2))
-pmap(list(ordinations, plottitle, envs), ordinationplot)
+pmap(list(ordinations, plottitle, envs), ordinationplot) # creates two pages of plots
 par(mfrow=c(1,1))
 ```
 

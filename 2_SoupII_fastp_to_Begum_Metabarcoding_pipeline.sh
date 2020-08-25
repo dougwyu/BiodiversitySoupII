@@ -30,12 +30,12 @@ ANALYSIS="analysis/"
 DAME="/usr/local/bin/DAMe/bin/" # pathname for the binaries on DAMe
     echo "The DAMe binaries are in" ${DAME}
     python3 --version # 3.7.6
-    python3 ${DAME}convertToUSearch.py -h # should see help
+    python3 ${DAME}convertToUSearch.py -h # should see help file
 BEGUM="/Users/Negorashi2011/src/Begum/src/" # pathname for the binaries on Begum
     echo "The Begum binaries are in" ${BEGUM}
     python2 --version # 2.7.17
-    python2 ${BEGUM}Begum.py sort -h
-    python2 ${BEGUM}Begum.py filter -h
+    python2 ${BEGUM}Begum.py sort -h # should see help file
+    python2 ${BEGUM}Begum.py filter -h # should see help file
 
 cd ${HOMEFOLDER}${SEQS} # cd into the sequence folder
 # confirm that you are in seqs/ folder
@@ -51,8 +51,8 @@ sample_names=($(cut -f 1 "${sample_info}" | uniq)) # convert variable to array
     echo ${sample_names[0]} # echo first array element
 echo "There are" "${#sample_names[@]}" "samples that will be processed:  " "${sample_names[@]}" # echo number of elements in the array
 
-# In the original April run, we observed that Tag27_Tag27 in PCRA_pool2 failed. We resequenced this sample in the November MiSeq run, and we now concatenate those sequences to the original April run fastq files. However, to make things fair, we first checked the number of seqs in the other samples in PCRA_pool2, and we subsampled the November run to a similar number before concatenating.
-# This has already been done. There is no need to run this code. It is here as documentation. 
+# In the original April run, we observed that Tag27_Tag27 in PCRA_pool2 failed. We resequenced this sample in the November MiSeq run, and we concatenated those sequences to the original April run fastq files. However, to make things fair, we first checked the number of seqs in the other samples in PCRA_pool2, and we subsampled the November run to a similar number before concatenating.
+# Note: The concatenation has already been done. There is no need to run this code. It is here as documentation.
     # mean number of totseqs in the April PCRApool2 was 31497 (not counting Tag27_Tag27, which failed)
     # Tag27_Tag27 in the November PCRApool2 was 345853 totseqs
     # 31497/345853 = 9.1% # November run datasize needs to be reduced to 9.1% of its original size
@@ -75,7 +75,7 @@ echo "There are" "${#sample_names[@]}" "samples that will be processed:  " "${sa
     # mv A2_S2_L001_R1_001_comb.fastq.gz A2_S2_L001_R1_001.fastq.gz # Date Modified is 6 March 2020
     # mv A2_S2_L001_R2_001_comb.fastq.gz A2_S2_L001_R2_001.fastq.gz # Date Modified is 6 March 2020
 
-# To run a loop interactively, select the entire loop and send to terminal.  Don't ctrl-Enter each line because this can send a command N times, as many lines as the command covers. So if the command wraps over 2 lines, ctrl-Entering each line sends the whole command twice, causing the command to be run twice per loop.
+# To run a loop interactively, select the entire loop and send to terminal.  Do not ctrl-Enter each line because this can send a command N times, as many lines as the command covers. So if the command wraps over 2 lines, ctrl-Entering each line sends the whole command twice, causing the command to be run twice per loop.
 
 # 1. Use fastp to trim adapters. trim bad nucleotides, and merge reads
 # fastp -h # 0.20.0
