@@ -13,7 +13,7 @@ library(vegan)
 library(car)
 library(phyloseq)
 library(data.table)
-# devtools::install_github("grunwaldlab/metacoder")
+# remotes::install_github("grunwaldlab/metacoder")
 library(metacoder)
 
 # general-use packages

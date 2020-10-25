@@ -4,9 +4,10 @@ set -u
 set -o pipefail
 
 ####################################################################################################
-# Software installation (tested on macOS only)
+# Software installation
+# tested on macOS Catalina (zsh)
 ####################################################################################################
-# The script uses open-source software and has been tested on macOS only.
+# The script uses open-source software and has been tested on macOS Catalina with zsh shell
 # Much of this software can be installed using Homebrew, which is a package manager for macOS.
 # The whole installation process can require several hours, depending on internet speed and how much you have previously installed
 
@@ -35,6 +36,10 @@ brew install fastp # http://github.com/OpenGene/fastp
 brew install python@2 # python2
 brew cleanup # remove unneeded files
 
+# Install env_parallel with these two commands; orig instructions at https://stackoverflow.com/a/27559537
+    # echo '. `which env_parallel.zsh`' >> $HOME/.zshenv
+    # source $HOME/.zshenv
+
 # Install miniconda3 for python3, numpy, and matplotlib
     # Installer package at:
          # https://repo.anaconda.com/miniconda/Miniconda3-latest-MacOSX-x86_64.pkg
@@ -49,7 +54,7 @@ which conda # should return somthing like /Users/HOME/opt/miniconda3/bin/conda
 which python # /usr/local/bin/python
 python --version # Python 2.7.17
 which python3 # /Users/Negorashi2011/opt/miniconda3/bin/python3
-python3 --version # Python 3.7.6
+python3 --version # Python 3.8.3
 
 # Install numpy and matplotlib
 conda install numpy
@@ -83,15 +88,15 @@ mv ~/Desktop/DAMe /usr/local/bin # on ubuntu will need sudo mv
 # The following GUI programs are installed in your Applications folder
 
 # Install Atom:  Combined text editor and terminal
-# download binary from https://atom.io # (currently 1.45.0)
-    # In Atom, go to Atom/Preferences (or type cmd+, (command comma)). This opens the Settings tab.  Click on the "Install" button on the left and type 'platformio-ide-terminal' in the 'Search packages' window, and when the package appears, click on the blue install button.
-    # Platformio-ide-terminal installs a terminal inside Atom. You can open terminal windows by clicking on the + sign in the lower left of the Atom window.
+# download binary from https://atom.io # (currently 1.52.0)
+    # In Atom, go to Atom/Preferences (or type cmd+, (command comma)). This opens the Settings tab.  Click on the "Install" button on the left and type 'terminus' in the 'Search packages' window, and when the package appears, click on the blue install button.
+    # Terminus installs a terminal inside Atom. You can open terminal windows by clicking on the + sign in the lower left of the Atom window. (you might need to restart Atom)
 
     # This allows you to send commands from an Atom text window to a terminal window (just like in RStudio), using 'ctrl-enter'.  In some cases, 'ctrl-enter' does not work. This is because the 'keymap' is missing.
-    # To fix, follow the instructions on:  https://github.com/platformio/platformio-atom-ide-terminal/issues/67
-         # open Keymap... under the Atom menu
+         # Go to Atom/Keymap... This opens a new tab entitled keymap.cson
          # add this text to the end of the keymap.cson file:
-    'atom-workspace atom-text-editor:not([mini])': 'ctrl-enter': 'platformio-ide-terminal:insert-selected-text'
+'atom-workspace atom-text-editor:not([mini])': 'ctrl-enter': 'terminus:insert-selected-text'
+        # Fix adapted from:  https://github.com/platformio/platformio-atom-ide-terminal/issues/67
 
 # Install R:  Statistical analysis
 # download binary from https://cran.r-project.org

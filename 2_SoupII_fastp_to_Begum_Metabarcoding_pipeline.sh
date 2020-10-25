@@ -5,6 +5,7 @@ set -o pipefail
 ##########################################################################################################
 ##########################################################################################################
 # script for metabarcoding: fastp to Begum pipeline
+# tested on macOS Catalina (zsh)
 ##########################################################################################################
 ###########################################################################################################
 
@@ -29,7 +30,7 @@ ANALYSIS="analysis/"
 # set DAMe and Begum pathnames and check that they work
 DAME="/usr/local/bin/DAMe/bin/" # pathname for the binaries on DAMe
     echo "The DAMe binaries are in" ${DAME}
-    python3 --version # 3.7.6
+    python3 --version # 3.8.3
     python3 ${DAME}convertToUSearch.py -h # should see help file
 BEGUM="/Users/Negorashi2011/src/Begum/src/" # pathname for the binaries on Begum
     echo "The Begum binaries are in" ${BEGUM}
@@ -88,9 +89,9 @@ do
 done
 
 # clean up
-# mkdir fastp_outputs/
-# mv *fastp.html fastp_outputs/
-# rm fastp.json
+mkdir fastp_outputs/
+mv *fastp.html fastp_outputs/
+rm fastp.json
 
 # 2. subsample sequence files to the same size (350 000 reads)
 # count number of reads in merged fastq files and inspect output to find a datafile size that is roughly equal across all samples. I choose a value of 350 000, which all PCRs except PCRF exceed (PCRF files have around 300K seqs), but PCRF is matched by its technical replicate PCRG.
@@ -101,7 +102,7 @@ ls {A,B,C,D,E,F,G,H}{1,2,3}*_mergedtrimmed.fq.gz | wc -l # 24 files
 parallel -j 1 -k "seqkit sample -s 100 -n 350000 {1}{2}*_mergedtrimmed.fq.gz | gzip > {1}{2}_350K_mergedtrimmed.fq.gz" ::: A B C D E F G H ::: 1 2 3
     # using -j 1 because this randomly fails on a few files. So by running one at a time, failures are reduced or eliminated.
 ls {A,B,C,D,E,F,G,H}{1,2,3}*_350K_mergedtrimmed.fq.gz | wc -l # 24 files
-ls {A,B,C,D,E,F,G,H}{1,2,3}*_350K_mergedtrimmed.fq.gz # SHOULD ALL HAVE 40-60M filesizes. However, the parallel command occasionally randomly fails for some files, so i look for the output files with 20 byte file sizes, remove them, and run just those again by adjusting the options in the parallel command . In this run, E1 and C2 failed, so i remove the 20-byte 350K output files and run again for just E1 and C2 (easier to just adjust the parallel command, even though i'm only running one file, e.g. parallel "cmd" ::: E ::: 1)
+ls {A,B,C,D,E,F,G,H}{1,2,3}*_350K_mergedtrimmed.fq.gz # Should all have 40-60M filesizes. However, the parallel command occasionally randomly fails for some files, so i look for the output files with 20 byte file sizes, remove them, and run just those again by adjusting the options in the parallel command . In this run, E1 and C2 failed, so i remove the 20-byte 350K output files and run again for just E1 and C2 (easier to just adjust the parallel command, even though i'm only running one file, e.g. parallel "cmd" ::: E ::: 1)
     # rm E1_350K_mergedtrimmed.fq.gz
     # rm C2_350K_mergedtrimmed.fq.gz
     # parallel "seqkit sample -s 100 -n 350000 {1}{2}*_mergedtrimmed.fq.gz | gzip > {1}{2}_350K_mergedtrimmed.fq.gz" ::: E ::: 1
@@ -118,7 +119,7 @@ ls folder{A,B,C,D,E,F,G,H}/pool{1,2,3}
 # 4. remove original mergedtrimmed files
 ls {A,B,C,D,E,F,G,H}{1,2,3}*_mergedtrimmed.fq.gz # should not display any _350K_mergedtrimmed files
 ls {A,B,C,D,E,F,G,H}{1,2,3}*_mergedtrimmed.fq.gz | wc -l
-# parallel --dryrun rm {1}{2}*_mergedtrimmed.fq.gz ::: A B C D E F G H ::: 1 2 3
+# parallel "rm {1}{2}*_mergedtrimmed.fq.gz" ::: A B C D E F G H ::: 1 2 3
 ls {A,B,C,D,E,F,G,H}{1,2,3}*_mergedtrimmed.fq.gz # should not display any _mergedtrimmed files
 
 #############################################################################################
@@ -178,17 +179,15 @@ parallel -k "cd folder{1}/{2}_{1}; \
 cd ${HOMEFOLDER}${SEQS} # cd into the sequence folder
 
 # 1. use the vsearch --cluster_size method to generate OTUs, and use --usearch_global + --otutabout to generate OTU tables by mapping the FilteredReads.forusearch_noN.fna reads to the OTU representative sequences. size= information automatically read
-# This step takes ~ 3 hrs, entirely because of the Filter_min1PCRs_min1copies data
-parallel -j 3 -k --progress "cd folder{1}/{2}_{1}; \
-    vsearch --derep_fulllength FilteredReads.forusearch_noN.fna --sizein --sizeout --fasta_width 0 --threads 0 --output FilteredReads_derep.fas --relabel "OTU"; \
-    vsearch --sortbysize FilteredReads_derep.fas --output FilteredReads_derep_sorted.fas; \
-    vsearch --uchime_denovo FilteredReads_derep_sorted.fas --nonchimeras FilteredReads_derep_sorted_nonchimeras.fas; \
-    vsearch --cluster_size FilteredReads_derep_sorted_nonchimeras.fas --sizein --sizeout --id 0.97 --sizeorder --centroids FilteredReads_derep_sorted_nonchimeras_vsearch97.fas; \
-    vsearch --sortbysize FilteredReads_derep_sorted_nonchimeras_vsearch97.fas --output FilteredReads_derep_sorted_nonchimeras_vsearch97_sorted.fas; \
-    vsearch --threads 6 --usearch_global FilteredReads.forusearch_noN.fna --db FilteredReads_derep_sorted_nonchimeras_vsearch97_sorted.fas \
-        --id .97 --otutabout table_BioSoupII_{1}_${OTUSIM}.txt;\
+# This step takes ~ 2 hrs, entirely because of the Filter_min1PCRs_min1copies data
+parallel -j 3 -k --progress "cd folder{1}/{2}_{1};\
+    vsearch --derep_fulllength FilteredReads.forusearch_noN.fna --sizein --sizeout --fasta_width 0 --threads 0 --output FilteredReads_derep.fas --relabel "OTU";\
+    vsearch --sortbysize FilteredReads_derep.fas --output FilteredReads_derep_sorted.fas;\
+    vsearch --uchime_denovo FilteredReads_derep_sorted.fas --nonchimeras FilteredReads_derep_sorted_nonchimeras.fas;\
+    vsearch --cluster_size FilteredReads_derep_sorted_nonchimeras.fas --sizein --sizeout --id 0.97 --sizeorder --centroids FilteredReads_derep_sorted_nonchimeras_vsearch97.fas;\
+    vsearch --sortbysize FilteredReads_derep_sorted_nonchimeras_vsearch97.fas --output FilteredReads_derep_sorted_nonchimeras_vsearch97_sorted.fas;\
+    vsearch --threads 6 --usearch_global FilteredReads.forusearch_noN.fna --db FilteredReads_derep_sorted_nonchimeras_vsearch97_sorted.fas --id .97 --otutabout "table_BioSoupII_{1}_${OTUSIM}.txt";\
     cd ${HOMEFOLDER}${SEQS}" ::: A B C D E F G H :::: BegumFilters
-
 
 # 2. generate matchlist.txt for lulu (compare OTUs pairwise for % similarities)
 cd ${HOMEFOLDER}${SEQS} # cd into the sequence folder
@@ -199,10 +198,10 @@ parallel -j 4 -k "cd folder{1}/{2}_{1}/; \
 
 # 3. lulu generate lulu-curated OTU table
 parallel -j 4 -k "cd folder{1}/{2}_{1}/; \
-    Rscript --vanilla --verbose ${HOMEFOLDER}scripts/LULU_20200307.R table_BioSoupII_{1}_${OTUSIM}.txt; \
+    Rscript --vanilla --verbose ${HOMEFOLDER}scripts/LULU_20200307.R "table_BioSoupII_{1}_${OTUSIM}.txt"; \
     rm lulu.log_*; \
     rm matchlist.txt; \
-    rm table_BioSoupII_{1}_${OTUSIM}.txt; \
+    rm "table_BioSoupII_{1}_${OTUSIM}.txt"; \
     cd ${HOMEFOLDER}${SEQS}" ::: A B C D E F G H :::: BegumFilters
 
 
@@ -229,15 +228,15 @@ parallel -k "cd folder{1}/{2}_{1}/; \
 
 
 # 6. Taxonomic assignment of OTU sequences
-# At this stage, we are only checking taxonomies down to Arthropoda, so we use something simple like vsearch --sintax to the MIDORI COI database: MIDORI_UNIQUE_20180221_COI_SINTAX.fasta.zip, available at  http://www.reference-midori.info/download.php#.  The file is large (744 MB), so we unzip before use, and discard the unzipped file after use.
+# At this stage, we are only checking taxonomies down to Arthropoda, so we use something simple like vsearch --sintax to the MIDORI COI database: MIDORI_UNIQUE_20180221_COI_SINTAX.fasta.zip, available at http://www.reference-midori.info/download.php#.  The file is large (744 MB), so we unzip before use, and discard the unzipped file after use.
 
-cd ${HOMEFOLDER}scripts/MIDORI # cd into the sequence folder and gunzip the MIDORI file before using
+cd ${HOMEFOLDER}scripts/MIDORI # cd into the sequence folder and unzip the MIDORI file before using. The zipped file remains, so there is no need to rezip afterwards
 # gunzip < MIDORI_UNIQUE_20180221_COI_SINTAX.fasta.gz > MIDORI_UNIQUE_20180221_COI_SINTAX.fasta
 MIDORIDB=${HOMEFOLDER}scripts/MIDORI/MIDORI_UNIQUE_20180221_COI_SINTAX.fasta
 seqkit head ${MIDORIDB} # check that the unzipped file is available
 
 cd ${HOMEFOLDER}${SEQS} # cd into the sequence folder
-# this takes ~3 hrs, entirely b/c of the Filter_min1PCRs_min1copies data. The other datasets take ~ 2 mins
+# this takes ~2 hrs, entirely b/c of the Filter_min1PCRs_min1copies data. The other datasets take ~ 2 mins each
 # tried with --strand both, and all hits were + strand
 parallel -j 1 -k --progress "cd folder{1}/{2}_{1}/; \
     vsearch --threads 7 --sintax FilteredReads_derep_sorted_nonchimeras_vsearch97_sorted_lulu_{1}.fas \
@@ -250,20 +249,46 @@ ls ${MIDORIDB}
 rm ${MIDORIDB}
 ls ${MIDORIDB}
 
-
 # 7. filter OTU representative sequences to keep only Arthropoda OTUs with prob >= ARTHMINPROB (set to 0.80).
 cd ${HOMEFOLDER}${SEQS} # cd into the sequence folder
+## if you are running on macOS with the zsh shell, using awk with GNU parallel is awkward. first put the awk function inside a function and export it. then run the function with env_parallel, not parallel
+DOAWK() {
+   FOLDER=$1
+   awk -F'[;,\t]' '$4 ~ /Arthropoda/  { print }' FilteredReads_derep_sorted_nonchimeras_vsearch97_sorted_lulu_$FOLDER.out > FilteredReads_derep_sorted_nonchimeras_vsearch97_sorted_lulu_Arthropoda_$FOLDER.out
+}; export -f DOAWK
+
+cd ${HOMEFOLDER}${SEQS} # cd into the sequence folder
+# use env_parallel to run user-defined functions with GNU parallel
+# to install env_parallel run these two commands; orig instructions at https://stackoverflow.com/a/27559537
+    # echo '. `which env_parallel.zsh`' >> $HOME/.zshenv
+    # source HOME/.zshenv
+env_parallel -k --dryrun "cd folder{1}/{2}_{1}; DOAWK {1}" ::: A B C D E F G H :::: BegumFilters
+env_parallel -k "cd folder{1}/{2}_{1}; DOAWK {1}" ::: A B C D E F G H :::: BegumFilters
+
+cd ${HOMEFOLDER}${SEQS} # cd into the sequence folder
 parallel -k "cd folder{1}/{2}_{1}/; \
-    awk '$(printf '$4') ~ /Arthropoda/  { print }' FilteredReads_derep_sorted_nonchimeras_vsearch97_sorted_lulu_{1}.out > FilteredReads_derep_sorted_nonchimeras_vsearch97_sorted_lulu_Arthropoda_{1}.out; \
     seqtk subseq FilteredReads_derep_sorted_nonchimeras_vsearch97_sorted_lulu_{1}.fas <(cut -f 1 FilteredReads_derep_sorted_nonchimeras_vsearch97_sorted_lulu_Arthropoda_{1}.out) > FilteredReads_derep_sorted_nonchimeras_vsearch97_sorted_lulu_Arthropoda_{1}.fas; \
     cd ${HOMEFOLDER}${SEQS}" ::: A B C D E F G H :::: BegumFilters
+
+cd ${HOMEFOLDER}${SEQS} # cd into the sequence folder
+parallel "ls folder{1}/{2}_{1}" ::: A B C D E F G H :::: BegumFilters
+
+
+## if you are running under a bash shell, everything can be done in a single parallel command.
+# 7 orig. filter OTU representative sequences to keep only Arthropoda OTUs with prob >= ARTHMINPROB (set to 0.80).
+# cd ${HOMEFOLDER}${SEQS} # cd into the sequence folder
+# parallel -k "cd folder{1}/{2}_{1}/; \
+#     awk '$(printf '$4') ~ /Arthropoda/  { print }' FilteredReads_derep_sorted_nonchimeras_vsearch97_sorted_lulu_{1}.out > FilteredReads_derep_sorted_nonchimeras_vsearch97_sorted_lulu_Arthropoda_{1}.out; \
+#     seqtk subseq FilteredReads_derep_sorted_nonchimeras_vsearch97_sorted_lulu_{1}.fas <(cut -f 1 FilteredReads_derep_sorted_nonchimeras_vsearch97_sorted_lulu_Arthropoda_{1}.out) > FilteredReads_derep_sorted_nonchimeras_vsearch97_sorted_lulu_Arthropoda_{1}.fas; \
+#     cd ${HOMEFOLDER}${SEQS}" ::: B :::: BegumFilters
 # The awk cmd filters in sintax output for rows where 4th column contains "Arthropoda" (which are the ones with likelihood > 0.80)
-# $(printf '$4') is needed to produce $4 within the quoted awk command
+# if awk command throws a syntax error, try using $(printf '$4') in place of $($4)
 # seqtk subseq filters for OTUs where OTU number is in the Arthropoda-filtered sintax output
 
 # sanity check. number of rows and number of seqs should be the same
-parallel -k "cat folder{1}/{2}_{1}/FilteredReads_derep_sorted_nonchimeras_vsearch97_sorted_lulu_Arthropoda_{1}.out | wc -l;\
-seqkit stats folder{1}/{2}_{1}/FilteredReads_derep_sorted_nonchimeras_vsearch97_sorted_lulu_Arthropoda_{1}.fas" ::: A B C D E F G H :::: BegumFilters
+cd ${HOMEFOLDER}${SEQS} # cd into the sequence folder
+parallel -k "seqkit stats folder{1}/{2}_{1}/FilteredReads_derep_sorted_nonchimeras_vsearch97_sorted_lulu_Arthropoda_{1}.fas; \
+cat folder{1}/{2}_{1}/FilteredReads_derep_sorted_nonchimeras_vsearch97_sorted_lulu_Arthropoda_{1}.out | wc -l" ::: A B C D E F G H :::: BegumFilters
 
 
 # 8. filter OTU table table_BioSoupII_97_lulu_Arthropoda_{1}.txt to keep only only Arthropoda OTUs with prob >= ARTHMINPROB (set to 0.80)
@@ -273,25 +298,15 @@ seqkit stats folder{1}/{2}_{1}/FilteredReads_derep_sorted_nonchimeras_vsearch97_
     # only joins lines with matching first column fields
 cd ${HOMEFOLDER}${SEQS} # cd into the sequence folder
 parallel -k "cd folder{1}/{2}_{1}/; \
-    gsed '1i OTU_ID' <(cut -f 1 FilteredReads_derep_sorted_nonchimeras_vsearch97_sorted_lulu_Arthropoda_{1}.out | sort) > Arthropoda_OTUs.txt
-    join -t \"$(printf '\t')\" Arthropoda_OTUs.txt table_BioSoupII_97_lulu.txt > table_BioSoupII_97_lulu_Arthropoda_{1}.txt; \
+    gsed '1i OTU_ID' <(cut -d ' ' -f 1 FilteredReads_derep_sorted_nonchimeras_vsearch97_sorted_lulu_Arthropoda_{1}.out | sort) > Arthropoda_OTUs.txt
+    join Arthropoda_OTUs.txt table_BioSoupII_97_lulu.txt > table_BioSoupII_97_lulu_Arthropoda_{1}.txt; \
+    gsed 's/ /\t/g' table_BioSoupII_97_lulu_Arthropoda_{1}.txt > table_BioSoupII_97_lulu_Arthropoda_{1}2.txt; \
+    mv table_BioSoupII_97_lulu_Arthropoda_{1}2.txt table_BioSoupII_97_lulu_Arthropoda_{1}.txt; \
     rm Arthropoda_OTUs.txt; \
     cd ${HOMEFOLDER}${SEQS}" ::: A B C D E F G H :::: BegumFilters
 
 
-# 9. BLAST and vsearch OTUs to mock-soup fasta database
-
-# run once to make a blast database
-# cd ${HOMEFOLDER}data/MTB # cd into the sequence folder
-# makeblastdb -in S1_MTBFAS.fasta -dbtype nucl -parse_seqids
-echo .${OTUSIM} # .97
-# OTUSIM=97 # if variable not present
-cd ${HOMEFOLDER}${SEQS} # cd into the sequence folder
-parallel -k "cd folder{1}/{2}_{1}/; \
-    blastn -db ${HOMEFOLDER}data/MTB/S1_MTBFAS.fasta -num_threads 7 -qcov_hsp_perc .90 -perc_identity .${OTUSIM} \
-    -max_target_seqs 1 -outfmt 6 -out table_BioSoupII_{1}_Arthropoda.blastnMTB.txt \
-    -query FilteredReads_derep_sorted_nonchimeras_vsearch97_sorted_lulu_Arthropoda_{1}.fas; \
-    cd ${HOMEFOLDER}${SEQS}" ::: A B C D E F G H :::: BegumFilters
+# 9. vsearch OTUs to mock-soup fasta database
 
 # vsearch variant
 OTUSIMvsearch=94 # to allow in some low-pct matches for inspection (blastn does this anyway)
@@ -300,6 +315,18 @@ parallel -k "cd folder{1}/{2}_{1}/; \
     vsearch --usearch_global FilteredReads_derep_sorted_nonchimeras_vsearch97_sorted_lulu_Arthropoda_{1}.fas --db ${HOMEFOLDER}data/MTB/S1_MTBFAS.fasta --id .${OTUSIMvsearch} --blast6out table_BioSoupII_{1}_Arthropoda.vsearchMTB.txt; \
     cd ${HOMEFOLDER}${SEQS}" ::: A B C D E F G H :::: BegumFilters
 
+# blastn variant
+# run once to make a blast database
+    cd ${HOMEFOLDER}data/MTB # cd into the sequence folder
+    makeblastdb -in S1_MTBFAS.fasta -dbtype nucl -parse_seqids
+echo .${OTUSIM} # .97
+# OTUSIM=97 # if variable not present
+cd ${HOMEFOLDER}${SEQS} # cd into the sequence folder
+parallel -k "cd folder{1}/{2}_{1}/; \
+    blastn -db ${HOMEFOLDER}data/MTB/S1_MTBFAS.fasta -num_threads 7 -qcov_hsp_perc .90 -perc_identity .${OTUSIM} \
+    -max_target_seqs 1 -outfmt 6 -out table_BioSoupII_{1}_Arthropoda.blastnMTB.txt \
+    -query FilteredReads_derep_sorted_nonchimeras_vsearch97_sorted_lulu_Arthropoda_{1}.fas; \
+    cd ${HOMEFOLDER}${SEQS}" ::: A B C D E F G H :::: BegumFilters
 
 ############################################################################################################
 #### Single Pool analysis
@@ -342,9 +369,10 @@ parallel -j 1 -k "cd folder{1}/Filter_min1PCRs_min1copies_{1}; \
 
 # move output tables to ${HOMEFOLDER}analysis/singlepools/ # cd into the sequence folder
 cd ${HOMEFOLDER}${SEQS} # cd into the sequence folder
+mkdir ${HOMEFOLDER}analysis/singlepools/
 parallel -k "mv folder{1}/Filter_min1PCRs_min1copies_{1}/table_BioSoupII_97_lulu_SnglPl_{1}{2}.txt ${HOMEFOLDER}analysis/singlepools/" ::: A B C D E F G H ::: 1 2 3
 
-# slightly change filename (to fit downstream R code a bit better) and change "#OTU ID" to OTU_ID
+# slightly change filename and change "#OTU ID" to OTU_ID (to fit downstream R code a bit better)
 cd ${HOMEFOLDER}analysis/singlepools/
 parallel "mv table_BioSoupII_97_lulu_SnglPl_{1}{2}.txt table_BioSoupII_97_{1}{2}_SnglPl.txt" ::: A B C D E F G H ::: 1 2 3
 parallel "gsed -i 's/#OTU ID/OTU_ID/g' table_BioSoupII_97_{1}{2}_SnglPl.txt" ::: A B C D E F G H ::: 1 2 3
@@ -354,10 +382,15 @@ cat ${HOMEFOLDER}${SEQS}BegumFilters # should show the three filter settings
 # make analysis folders
     cd ${HOMEFOLDER}analysis
     parallel mkdir {} :::: ${HOMEFOLDER}${SEQS}BegumFilters
-# copy tables
-parallel cp ${HOMEFOLDER}${SEQS}folder*/{1}_*/table_BioSoupII_97_lulu_Arthropoda_*.txt ${HOMEFOLDER}analysis/{1}/ :::: ${HOMEFOLDER}${SEQS}BegumFilters
-parallel cp ${HOMEFOLDER}${SEQS}folder*/{1}_*/table_BioSoupII_*_Arthropoda.blastnMTB.txt ${HOMEFOLDER}analysis/{1}/ :::: ${HOMEFOLDER}${SEQS}BegumFilters
-parallel cp ${HOMEFOLDER}${SEQS}folder*/{1}_*/table_BioSoupII_*_Arthropoda.vsearchMTB.txt ${HOMEFOLDER}analysis/{1}/ :::: ${HOMEFOLDER}${SEQS}BegumFilters
-parallel cp ${HOMEFOLDER}${SEQS}folder*/{1}_*/FilteredReads_derep_sorted_nonchimeras_vsearch97_sorted_lulu_Arthropoda_*.out ${HOMEFOLDER}analysis/{1}/ :::: ${HOMEFOLDER}${SEQS}BegumFilters
+# copy tables to analysis folders
+parallel "cp ${HOMEFOLDER}${SEQS}folder*/{1}_*/table_BioSoupII_97_lulu_Arthropoda_*.txt ${HOMEFOLDER}analysis/{1}/" :::: ${HOMEFOLDER}${SEQS}BegumFilters
+
+parallel "cp ${HOMEFOLDER}${SEQS}folder*/{1}_*/table_BioSoupII_*_Arthropoda.blastnMTB.txt ${HOMEFOLDER}analysis/{1}/" :::: ${HOMEFOLDER}${SEQS}BegumFilters
+
+parallel "cp ${HOMEFOLDER}${SEQS}folder*/{1}_*/table_BioSoupII_*_Arthropoda.vsearchMTB.txt ${HOMEFOLDER}analysis/{1}/" :::: ${HOMEFOLDER}${SEQS}BegumFilters
+
+parallel "cp ${HOMEFOLDER}${SEQS}folder*/{1}_*/FilteredReads_derep_sorted_nonchimeras_vsearch97_sorted_lulu_Arthropoda_*.out ${HOMEFOLDER}analysis/{1}/" :::: ${HOMEFOLDER}${SEQS}BegumFilters
+
 # END
+
 # Go to 3_SoupII_ecological_analysis.Rmd and 4_SoupII_singlepools_OTU_table.Rmd
