@@ -2,7 +2,7 @@
 
 See Wiki page for required folder structure.  
 
-This folder contains all the files created after the BioSoupII pipeline has finished creating OTU tables and assigning taxonomies. If you want to run the pipeline from scratch, remove the following folders. The remaining files are the information files that DAMe/Begum uses to run the sorting and filtering and the reference files for blasting. 
+This folder contains all the files created after the BioSoupII pipeline has finished creating OTU tables and assigning taxonomies. If you want to run the pipeline from scratch, remove the following folders. The remaining files are the information files that DAMe/Begum uses to run the sorting and filtering and the reference files for blasting.
 ```
 cd BiodiversitySoupII_repo/  
 # there should be three folders:  analysis/, data/, and scripts/
@@ -22,13 +22,11 @@ rm -rf data/seqs/folder{A,B,C,D,E,F,G,H}/PCR_{A,B,C,D,E,F,G,H}_pool{1,2,3}.tagIn
 rm -rf data/seqs/folder{A,B,C,D,E,F,G,H}/pool{1,2,3}/*_350K_mergedtrimmed.fq.gz  
 ```
 
+**These are the scripts used in our Biodiversity Soup II manuscript. This pipeline has been tested on macOS Catalina (zsh shell) and processes Illumina HiSeq/MiSeq files for metabarcoding. Software installation information is in this script. **  
 
+**1_SoupII_software_install_on_macOS.sh**  
 
-**These are the scripts used in our Biodiversity Soup II manuscript.**  
-
-**1_SoupII_software_install_on_macos_20191010.sh**  
-
-This pipeline is tested for macOS and processes Illumina HiSeq/MiSeq files for metabarcoding. Software installation information is in this script.  
+Install software for the pipeline
 
 **2_SoupII_fastp_to_Begum_Metabarcoding_pipeline.sh**  
 
