@@ -25,6 +25,7 @@ brew tap brewsci/bio # a "tap" is a repository of "installation formulas" of spe
 brew install git
 brew install coreutils
 brew install wget
+brew install rename
 brew install gnu-sed # (gsed == GNU version of sed == Linux version of sed)
 brew install grep # gnu-grep
 brew install gawk # gnu-awk

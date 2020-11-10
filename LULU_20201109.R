@@ -11,30 +11,34 @@ otutablefilename <- args[1]
 library(tidyverse)
 # devtools::install_github("tobiasgf/lulu", force = TRUE)
 library(lulu)
-library(knitr)
 
 
 ## ---- eval=FALSE, include=FALSE------------------------------------------------
-## setwd("~/Xiaoyangmiseqdata/BiodiversitySoupII/data/seqs/folderA/Filter_min1PCRs_min1copies_A")
-## otutablefilename <- "../data/seqs/folderA/Filter_min1PCRs_min1copies_A/table_BioSoupII_A_97.txt"
-## matchlistfilename <- "../data/seqs/folderA/Filter_min1PCRs_min1copies_A/matchlist.txt"
-
+## test code
+# pcr <- "A"
+# setwd(glue::glue("~/Xiaoyangmiseqdata/BiodiversitySoupII_repo/data/seqs/folder{pcr}/Filter_min1PCRs_min2copies_{pcr}"))
+# otutablefilename <- glue::glue("table_BioSoupII_{pcr}_97.txt")
+# matchlistfilename <- "matchlist.txt"
 
 ## ------------------------------------------------------------------------------
 otutable <- read_tsv(otutablefilename) %>% 
     rename(OTU_ID = "#OTU ID") %>% 
     column_to_rownames(var = "OTU_ID")
 
-matchlist <- read_tsv("matchlist.txt", col_names = FALSE)
-
+matchlist <- read.table("matchlist.txt", header=FALSE,
+                        as.is=TRUE, stringsAsFactors=FALSE)
 
 ## ------------------------------------------------------------------------------
-curated_result <- lulu(otutable, matchlist)
-curated_table <- rownames_to_column(curated_result$curated_table, var = "OTU_ID")
-write_tsv(curated_table, path = "table_BioSoupII_97_lulu.txt")
+curated_result <- lulu(otutable, matchlist, minimum_match = 97.1) # default minimum_match = 84% similarity, but such a low value only works if there are many samples, so that otu co-occurrence gives a strong signal that two otus are parent and child.
+
+curated_table <- rownames_to_column(curated_result$curated_table, 
+                                    var = "OTU_ID"
+                                    )
+
+write_tsv(curated_table, file = "table_BioSoupII_97_lulu.txt")
 
 
 ## ----eval=FALSE, include=FALSE-------------------------------------------------
 ## setwd("~/Xiaoyangmiseqdata/BiodiversitySoupII/scripts")
-## purl("LULU_20200307.Rmd")
+## knitr::purl("LULU_20200307.Rmd")
 

@@ -133,7 +133,7 @@ splminOTU <- map(spl, minOTUsizefilter)
 Check that all samples (rows) still have sufficient numbers of reads in them.  This isn't a risk with this dataset, but some datasets have samples with few, low-read-number OTUs. Removing small OTUs will sometimes produce samples (rows) that have almost no data, because that sample failed during PCR or DNA extraction. 
 ```{r}
 tablerowsums <- map_dfr(splminOTU, rowSums)
-# View(tablerowsums)
+View(tablerowsums)
 ```
 
 In PCR H1, we find that the hhhlbody sample has no reads after filtering, which is probably because the PCR failed. Thus, the h1/hhhlbody results will overestimate dropout. 
@@ -144,6 +144,9 @@ splminOTU[["H1"]] <- splminOTU[["H1"]] %>%
     rownames_to_column() %>% 
     filter(rowname != "hhhlbody") %>% 
     column_to_rownames()
+
+tablerowsums2 <- map_dfr(splminOTU, rowSums)
+View(tablerowsums2)
 ```
 
 
