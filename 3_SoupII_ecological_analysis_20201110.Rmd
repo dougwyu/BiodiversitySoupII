@@ -755,6 +755,21 @@ heat_tree_matrix(obj,
                  node_color_axis_label = "Log2 ratio median proportions")
 ```
 
+Read counts
+```{r}
+readcount <- read_table2(file.path("..", "data", "seqs",
+                                "mergedtrimmed_read_counts.txt")
+                         )
+
+readcountAF <- readcount %>% slice(1:18)
+readcountGH <- readcount %>% slice(19:24)
+
+sum(readcountAF$num_seqs) # 7139290
+mean(readcountAF$num_seqs) # 396627.2
+
+sum(readcountGH$num_seqs) # 6356655
+mean(readcountGH$num_seqs) # 1059442
+```
 
 
 <details>
