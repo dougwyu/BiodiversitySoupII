@@ -44,14 +44,14 @@ library(conflicted)
   conflict_prefer("unite", "tidyr", quiet = TRUE)
   conflict_prefer("intersect", "dplyr", quiet = TRUE)
   conflict_prefer("year", "lubridate", quiet = TRUE)
-  conflict_prefer("setdiff", "dplyr", quiet = TRUE) # w/out this, R crashes
+  conflict_prefer("setdiff", "dplyr", quiet = TRUE) 
 
 # Provide real numbers, not scientific notation.
 options(scipen = 999)
 ```
 
 ########################################################################
-Import tables, join, and remove small OTUs using phyloseq rarefaction
+Import tables and join with metadata
 ########################################################################
 
 Import OTU tables. These tables include only Arthropoda-assigned OTUs. 
@@ -64,7 +64,7 @@ begumfilter <- "Filter_min1PCRs_min4copies"
 begumfilter <- "Filter_min2PCRs_min1copies"
 begumfilter <- "Filter_min2PCRs_min2copies"
 begumfilter <- "Filter_min2PCRs_min3copies"
-begumfilter <- "Filter_min2PCRs_min4copies" # Begumfilter stringency level under which the figures and analyses were run (Except Table 3 and Table S_1)
+begumfilter <- "Filter_min2PCRs_min4copies" # Begumfilter stringency level under which most figures and analyses were run (except Table S_1, which presents all stringency levels)
 begumfilter <- "Filter_min3PCRs_min1copies"
 begumfilter <- "Filter_min3PCRs_min2copies"
 begumfilter <- "Filter_min3PCRs_min3copies"
@@ -124,7 +124,7 @@ View(tablerowsums)
 
 
 ########################################################################
-Hits, False-negative, and False-positive analysis, Tables 3 and S_1
+Hits, False-negatives, and False-positives, Tables 3 and S_1
 ########################################################################
 
 Combine echo OTUs and count the number of drop-ins and drop-outs.  
@@ -137,7 +137,7 @@ Import BLAST/vsearch tables. I am using the vsearch tables, but the BLAST result
 ```{r import blast vsearch tables}
 # otutables <- "table_BioSoupII_\\w_Arthropoda.blastnMTB.txt"
 otutables <- "table_BioSoupII_\\w_Arthropoda.vsearchMTB.txt"
-begumfilter # confirm correct value
+begumfilter # confirm correct stringency level
 
 otu_files <- list.files(Sys.glob(file.path("..", "analysis", begumfilter)), pattern = otutables, full.names = TRUE)
     # list.files is used to look for files matching "table_BioSoupII_97_lulu_Arthropoda_\\w.txt"
@@ -157,7 +157,7 @@ readotutables <- function(x) {
     df
 }
 
-blastmtb <- map(otu_files, readotutables) # note that this could contain either the blastn or vsearch results. blastn and vsearch results appear to be the same, as far as i've checked. I'm using the vsearch results
+blastmtb <- map(otu_files, readotutables) # note that this could contain either the blastn or vsearch results. I'm using the vsearch results
 
 # name dfs in spl list
 # foldervec <- sub("table_BioSoupII_(\\w)_Arthropoda.blastnMTB.txt", "\\1", basename(otu_files), perl=TRUE)
@@ -203,19 +203,19 @@ Filter_min2PCRs
 pident_threshold2 <- 97 # min % similarity to be considered a match to an MTBseq
 
 # number of hit OTUs per soup (OTUs >=97% similar to an MTBseq), combine echo OTUs
+# sseqids are the 248 input and 4 positive-control sequences
 MTB_hits <- function(OTUBLASTqpcr) {
     OTUBLASTqpcr %>% 
     filter(!is.na(sseqid)) %>%  # remove drop-ins
     filter(pident >= pident_threshold2) %>% # remove drop-ins
-    filter(!str_starts(sseqid, "P")) %>% # remove hits to positive ctrl
+    filter(!str_starts(sseqid, "P")) %>% # remove hits to positive-ctrl species
     select(hlllleg, hlllbody, Hhmlleg, Hhmlbody, hhhlleg, hhhlbody, mmmmleg, mmmmbody, sseqid) %>% 
     group_by(sseqid) %>% # group by MTBseq
     summarise(across(.cols = c(hlllleg, hlllbody, Hhmlleg, Hhmlbody, hhhlleg, hhhlbody, mmmmleg, mmmmbody), ~sum(.x, na.rm = TRUE))) %>% # sum reads by sseqid to group echo OTUs
-    mutate(across(where(is.numeric), ~1 * (.x > 0))) %>% # transform sums > 1 to 1 to convert multiple hits to each sseqid only once
+    mutate(across(where(is.numeric), ~1 * (.x > 0))) %>% # transform sums > 1 to 1 to count multiple hits to each sseqid only once
     ungroup() %>% 
     summarise(across(.cols = c(hlllleg, hlllbody, Hhmlleg, Hhmlbody, hhhlleg, hhhlbody, mmmmleg, mmmmbody), ~sum(.x, na.rm = TRUE))) # sum hits over all sseqid
 }
-
 
 # number of drop-in OTUs, defined as no-hit to MTBseq or pident<97%
 OTU_dropins <- function(OTUBLASTqpcr) {
@@ -246,17 +246,18 @@ OTUBLAST_hits_pct <- OTUBLAST_hits_t %>%
     mutate_at(vars(A:H), list(~ round(., digits = 3)))
 OTUBLAST_hits_pct$metric <- "hit_pct"
 
-# calculate % of OTUs that are dropins
+# calculate proportion dropins as dropins/maxMTB to generate a measure of dropins relative to the number of true input sequences. 
 OTUBLAST_dropins_pct <- OTUBLAST_dropins_t %>% 
     mutate_at(vars(A:H), list(~ ./maxMTB)) %>%
     mutate_at(vars(A:H), list(~ round(., digits = 3)))
 OTUBLAST_dropins_pct$metric <- "dropin_pct"
 
-# calculate number of dropouts and % dropouts
+# calculate number of dropouts 
 OTUBLAST_dropouts <- OTUBLAST_hits_t %>% 
     mutate_at(vars(A:H), list(~maxMTB - .))
 OTUBLAST_dropouts$metric <- "dropouts"
 
+# calculate % dropouts as a proportion of true input sequences
 OTUBLAST_dropouts_pct <- OTUBLAST_dropouts %>% 
     mutate_at(vars(A:H), list(~ ./maxMTB)) %>%
     mutate_at(vars(A:H), list(~ round(., digits = 3)))
@@ -313,17 +314,18 @@ OTUBLAST_hits_pct <- OTUBLAST_hits_t %>%
     mutate_at(vars(A:H), list(~ round(., digits = 3)))
 OTUBLAST_hits_pct$metric <- "hit_pct"
 
-# calculate % of OTUs that are dropins
+# calculate proportion dropins as dropins/maxMTB to generate a measure of dropins relative to the number of true input sequences. 
 OTUBLAST_dropins_pct <- OTUBLAST_dropins_t %>% 
     mutate_at(vars(A:H), list(~ ./maxMTB)) %>%
     mutate_at(vars(A:H), list(~ round(., digits = 3)))
 OTUBLAST_dropins_pct$metric <- "dropin_pct"
 
-# calculate number of dropouts and % dropouts
+# calculate number of dropouts
 OTUBLAST_dropouts <- OTUBLAST_hits_t %>% 
     mutate_at(vars(A:H), list(~maxMTB - .))
 OTUBLAST_dropouts$metric <- "dropouts"
 
+# calculate % dropouts as a proportion of true input sequences
 OTUBLAST_dropouts_pct <- OTUBLAST_dropouts %>% 
     mutate_at(vars(A:H), list(~ ./maxMTB)) %>%
     mutate_at(vars(A:H), list(~ round(., digits = 3)))
@@ -365,14 +367,14 @@ Table_DROPS_97 <- bind_rows(OTUBLAST_all_97_Filter_min1PCRs_min1copies,
                             ) %>% 
     select(soup, begumfilter, metric, everything())
 
+# save Table S_1, from which Table 3 was created
 # fs::dir_create(file.path("..", "results"))
-
-# write.xlsx(Table_DROPS_97, file.path("..", "results", "Table_DROPS_97.xlsx"), sheetName = "Table_Drops_97", row.names = FALSE)
+# write.xlsx(Table_DROPS_97, file.path("..", "results", "Table_S_1.xlsx"), sheetName = "Table_S_1", row.names = FALSE)
 ```
 
 
 ########################################################################
-Community analysis, Figure NMDS
+Community analysis, Figure 2
 ########################################################################
 
 Plot NMDS of every OTU table. Using Begumfilter stringency level "Filter_min2PCRs_min4copies"
@@ -462,7 +464,7 @@ pmap(list(ordination_one, plottitle, envs), ordinationplot)
 
 
 ########################################################################
-Evenness analysis, Figure SHANNON
+Evenness analysis, Figure S_1
 ########################################################################
 Using Begumfilter stringency level "Filter_min2PCRs_min4copies"
 ```{r Figure S_1}
@@ -661,7 +663,7 @@ p4 <- ggplot(OTUBLASTqpcrA) +
 
 
 ########################################################################
-Taxonomic amplification bias, Figure METACODER
+Taxonomic amplification bias, Figure 4
 ########################################################################
 Using Begumfilter stringency level "Filter_min2PCRs_min4copies" and mmmm_body
 ```{r metacoder}
