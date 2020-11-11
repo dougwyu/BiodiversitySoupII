@@ -228,7 +228,7 @@ OTU_dropins <- function(OTUBLASTqpcr) {
 OTUBLAST_hits <- map_dfr(OTUBLASTqpcr, MTB_hits, .id = "PCR")
 OTUBLAST_dropins <- map_dfr(OTUBLASTqpcr, OTU_dropins, .id = "PCR")
 
-# calculate numbers of input MTB OTUs recovered by metabarcoding (hits) and numbers of OTUs that are dropins
+# calculate numbers of input MTB OTUs recovered by metabarcoding (hits) and numbers of OTUs that are dropins, for a specific soup (for the paper: mmmmbody)
 soupname <- "mmmmbody"
 OTUBLAST_hits_t <- rotate_df(OTUBLAST_hits, rn = "soup", cn = TRUE) %>% 
     filter(soup == soupname)
@@ -301,12 +301,14 @@ OTUBLAST_dropins <- map_dfr(OTUBLASTqpcr, OTU_dropins, .id = "PCR")
 
 maxMTB <- 248 # max number of input OTUs
 
+# calculate numbers of input MTB OTUs recovered by metabarcoding (hits) and numbers of OTUs that are dropins, for a specific soup (for the paper: mmmmbody)
+soupname <- "mmmmbody"
 OTUBLAST_hits_t <- rotate_df(OTUBLAST_hits, rn = "soup", cn = TRUE) %>% 
-    filter(soup == "mmmmbody")
+    filter(soup == soupname)
 OTUBLAST_hits_t$metric <- "hits"
 
 OTUBLAST_dropins_t <- rotate_df(OTUBLAST_dropins, rn = "soup", cn = TRUE) %>% 
-    filter(soup == "mmmmbody")
+    filter(soup == soupname)
 OTUBLAST_dropins_t$metric <- "dropins"
 
 # calculate % of input MTB OTUs recovered by metabarcoding and round to 2 digits
