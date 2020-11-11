@@ -1,7 +1,7 @@
 This script is applied to the singlepools and does three things
 1) It imports the singlepool OTU tables.  
 2) Then it carries out a phyloseq analysis of OTU sizes to choose a minimum OTU size, and filters out the smaller OTUs. The missing sample in H1 is removed from the dataset.
-3) Finally, it calculates NMDS ordinations and ordination plots for all singlepools. 
+3) Finally, it calculates NMDS ordinations and ordination plots for all singlepools. Figures 3, S_3, S_4
 
 ```{r setup chunk, message=FALSE}
 # copy the following into each script   
@@ -14,9 +14,9 @@ knitr::opts_chunk$set(
 # script-specific libraries
 library(vegan)
 library(car)
+library(RColorBrewer) # for colours
 library(phyloseq)
 library(data.table)
-library(RColorBrewer) # for colours
 
 # general-use packages
 library(here)
@@ -25,7 +25,6 @@ library(readxl)
 library(cowplot)
 library(lubridate)
 library(patchwork)
-# library(sessioninfo)
 library(arsenal) # for summary(comparedf())
 library(sjmisc) # for rotate_df()
 library(envDocument)
@@ -40,19 +39,13 @@ library(conflicted)
   conflict_prefer("unite", "tidyr", quiet = TRUE)
   conflict_prefer("intersect", "dplyr", quiet = TRUE)
   conflict_prefer("year", "lubridate", quiet = TRUE)
-  conflict_prefer("setdiff", "dplyr", quiet = TRUE) # w/out this, R crashes
+  conflict_prefer("setdiff", "dplyr", quiet = TRUE) 
   
-env_doc("table", git = FALSE)
-# sessionInfo() # base R method
-# sessioninfo::session_info() # package sessioninfo method
-
 # Provide real numbers, not scientific notation.
 options(scipen = 999)
-
-# rm(list=ls())
 ```
 
-Import singlepool OTU tables. These tables include all OTUs, not just Arthropoda-assigned OTUs. 
+Import singlepool OTU tables. These tables include all OTUs, not just Arthropoda-assigned OTUs, and are not Begum filtered because filtering merges the three PCRs. This test is therefore a test based on the full dataset, including control samples
 ```{r import singlepool tables}
 splfiles <- "table_BioSoupII_97_\\w\\d_SnglPl\\.txt"
 spl_files <- list.files(Sys.glob(file.path("..", "analysis", "singlepools")), pattern = splfiles, full.names = TRUE)
@@ -80,10 +73,12 @@ names(spl) <- folderpoolvec
 
 phyloseq filtering by OTU size. This step removes "small" OTUs, which are probably artefacts of PCR and sequencing error, i.e. echo OTUs, which should have been clustered into the legitimate OTUs. What is "small"?  It is a bit subjective, but the phyloseq method helps us make a judgement. Phyloseq creates a rarefaction curve, showing how many OTUs would be removed at each minimum OTU size. A minimum OTU size is set at the tangent to this curve. See the graphs created below to understand this.
 
+The reason for using phyloseq OTU-size filtering is because the singlepool analysis cannot use Begum filtering to remove false-positive sequences. 
+
 Strategy:  survey a sample of OTU tables to decide on a common min OTU size. Then apply a function to all OTU tables in the spl list.
 ```{r phyloseq analysis, eval=FALSE}
 # choose a table
-communityAll_t <- spl$H3
+communityAll_t <- spl$A1 # starting with PCRA1
 
 # Inspect the control sample (PC, PCR, xb) OTUs and filter the OTU table.  
 communityAll_t <- communityAll_t %>% arrange(desc(PC))
@@ -150,7 +145,7 @@ View(tablerowsums2)
 ```
 
 
-Plot NMDS of every singlepool
+Plot NMDS of every singlepool, generates 3 screens of plots:  A1-H3
 ```{r ordinations and plot ordinations}
 (colorvec <- c("#EF8A62", "#67A9CF"))  # from:  brewer.pal(3,"RdBu")
 
@@ -241,6 +236,7 @@ extract_env_H1 <- function(x){
     env$sprichness <- specnumber(x, MARGIN = 1)
     env
 }
+
 ordinationplot_H1 <- function(x, y, z){
   xlim <- c(-1.5, 1.0)
   ylim <- c(-1, 1)
@@ -301,8 +297,7 @@ t.test2 <- function(m1,m2,s1,s2,n1,n2,m0=0,equal.variance=FALSE)
 ```
 
 
-plot Procrustes plots for A vs B
-optimal Ta and optimal cycle number
+plot Procrustes plots for A vs B:  optimal Ta and optimal cycle number
 ```{r procrustes A B}
 # calculate all ordinations
 ordinations <- map(splminOTU_all, ordination)
@@ -459,16 +454,18 @@ correlationsCD_difftags
 (CDsinglepoolstest <- t.test2(m1, m2, s1, s2, n1, n2))
 ```
 
-plot Procrustes plots for G and H (omit H1)
+plot Procrustes plots for G and H (omitting H1)
 Touchdown PCR
 ```{r procrustes G H}
-# protestG1H1 <- protest(ordinations$G1, ordinations$H1) # H1 cannot be used because is is missing one sample hhhlleg
+# H1 cannot be used because it is is missing one sample: hhhlleg
+
+# protestG1H1 <- protest(ordinations$G1, ordinations$H1) 
 protestG2H2 <- protest(ordinations$G2, ordinations$H2)
 protestG3H3 <- protest(ordinations$G3, ordinations$H3)
 
 
-# different tags at higher than optimal temperature, n = 12 such comparisons
-# G1:G2, G1:G3, G2:G3, G1:H2, G1:H3, G2:H1, G2:H3, G3:H1, G3:H2, H1:H2, H1:H3, H2:H3
+# different tags at higher than optimal temperature, n = 8 such comparisons
+# G1:G2, G1:G3, G2:G3, G1:H2, G1:H3, G2:H3, G3:H2, H2:H3
 # procrustes tests
   protestG1G2 <- protest(ordinations$G1, ordinations$G2)
   protestG1G3 <- protest(ordinations$G1, ordinations$G3)
@@ -508,7 +505,7 @@ par(mfrow=c(1,1))
 
 # store correlation coefficients from Protest
 pairwiseGH_sametags <- c("G2H2","G3H3")
-pairwiseGH_difftags <- c("G1G2", "G1G3", "G2G3", "G1H2", "G1H3", "G2H3", "G3H1", "G3H2", "H2H3")
+pairwiseGH_difftags <- c("G1G2", "G1G3", "G2G3", "G1H2", "G1H3", "G2H3", "G3H2", "H2H3")
 correlationsGH_sametags <- 0
 j=0
 for (i in pairwiseGH_sametags) {
@@ -537,3 +534,15 @@ correlationsGH_difftags
 ```
 
 
+
+<details>
+<summary>Reproducibility receipt</summary>
+```{r}
+# datetime
+Sys.time()
+
+# repository
+git2r::repository(here::here())
+
+envDocument::env_doc("table", git = FALSE)
+```
