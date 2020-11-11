@@ -229,12 +229,13 @@ OTUBLAST_hits <- map_dfr(OTUBLASTqpcr, MTB_hits, .id = "PCR")
 OTUBLAST_dropins <- map_dfr(OTUBLASTqpcr, OTU_dropins, .id = "PCR")
 
 # calculate numbers of input MTB OTUs recovered by metabarcoding (hits) and numbers of OTUs that are dropins
+soupname <- "mmmmbody"
 OTUBLAST_hits_t <- rotate_df(OTUBLAST_hits, rn = "soup", cn = TRUE) %>% 
-    filter(soup == "mmmmbody")
+    filter(soup == soupname)
 OTUBLAST_hits_t$metric <- "hits"
 
 OTUBLAST_dropins_t <- rotate_df(OTUBLAST_dropins, rn = "soup", cn = TRUE) %>% 
-    filter(soup == "mmmmbody")
+    filter(soup == soupname)
 OTUBLAST_dropins_t$metric <- "dropins"
 
 

@@ -43,10 +43,9 @@ f)  Filter OTU tables and OTU representative sequences fasta by taxonomy (keepin
 **3_SoupII_ecological_analysis.Rmd**  
 
 1. Community analysis  
-a) filter out artefactually small OTUs via phyloseq method (https://github.com/joey711/phyloseq)  
-b) NMDS ordination to view results  
-c) estimate proportion of OTUs that are missing (drop-outs) and are erroneous (false-positives, drop-ins) as a function of Begum filtering, PCR condition, and taxonomy  
-d) analyse whether OTU size contains abundance information    
+a) NMDS ordination to view results  
+b) estimate proportion of OTUs that are missing (drop-outs) and are erroneous (false-positives, drop-ins) as a function of Begum filtering, PCR condition, and taxonomy  
+c) analyse whether OTU size contains abundance information and how much species evenness affects species recovery
 
 **4_SoupII_singlepools_OTU_table.Rmd**   
 
