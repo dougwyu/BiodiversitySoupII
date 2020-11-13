@@ -11,8 +11,6 @@ knitr::opts_chunk$set(
 # script-specific libraries
 library(vegan)
 library(car)
-library(phyloseq)
-library(data.table)
 # remotes::install_github("grunwaldlab/metacoder")
 library(metacoder)
 library(xlsx)
@@ -54,28 +52,19 @@ options(scipen = 999)
 Import tables and join with metadata
 ########################################################################
 
-Import OTU tables. These tables include only Arthropoda-assigned OTUs. 
-Choose one begumfilter value and then run pipeline 
+Import OTU tables. These tables include only Arthropoda-assigned OTUs.
+
+Load begumfilter value and run pipeline until code chunk 'hits dropouts and dropins for Begumfilter with 1 or 2 PCRs'
 ```{r begumfilter selection, eval=FALSE}
-begumfilter <- "Filter_min1PCRs_min1copies"
-begumfilter <- "Filter_min1PCRs_min2copies"
-begumfilter <- "Filter_min1PCRs_min3copies"
-begumfilter <- "Filter_min1PCRs_min4copies"
-begumfilter <- "Filter_min2PCRs_min1copies"
-begumfilter <- "Filter_min2PCRs_min2copies"
-begumfilter <- "Filter_min2PCRs_min3copies"
 begumfilter <- "Filter_min2PCRs_min4copies" # Begumfilter stringency level under which most figures and analyses were run (except Table S_1, which presents all stringency levels)
-begumfilter <- "Filter_min3PCRs_min1copies"
-begumfilter <- "Filter_min3PCRs_min2copies"
-begumfilter <- "Filter_min3PCRs_min3copies"
-begumfilter <- "Filter_min3PCRs_min4copies"
 ```
 
 ```{r import OTU tables for a given Begumfilter}
-otutables <- "table_BioSoupII_97_lulu_Arthropoda_\\w.txt"
+otutables <- "table_BioSoupII_97_Arthropoda_\\w.txt"
 
-otu_files <- list.files(Sys.glob(file.path("..", "analysis", begumfilter)), pattern = otutables, full.names = TRUE)
-    # list.files is used to look for files matching "table_BioSoupII_97_lulu_Arthropoda_\\w.txt"
+otu_files <- list.files(Sys.glob(file.path("..", "analysis", begumfilter)), 
+                        pattern = otutables, full.names = TRUE)
+    # list.files is used to look for files matching "table_BioSoupII_97_Arthropoda_\\w.txt"
     # full.names = TRUE returns the pathnames
     # \\ is used to escape \ and . (because otherwise they are read with grep as "ignore" and "any character". R needs a second \)
 head(otu_files); cat("    ", length(otu_files), "total files")
@@ -88,7 +77,7 @@ readotutables <- function(x) {
 otu <- map(otu_files, readotutables)
 
 # name dfs in spl list
-folderpoolvec <- sub("table_BioSoupII_97_lulu_Arthropoda_(\\w).txt", 
+folderpoolvec <- sub("table_BioSoupII_97_Arthropoda_(\\w).txt", 
                      "\\1", basename(otu_files), perl=TRUE)
 
 names(otu) <- folderpoolvec
@@ -98,8 +87,8 @@ names(otu) <- folderpoolvec
 
 Rotate OTU tables and and set 1-read cells to 0
 ```{r filter OTU tables for min OTU size and set 1-read cells to 0}
-threshold_otu_size <- 1 # option to set minimum OTU size (not used). To not filter, set to value 1
-set_one_read_cells_to <- 0 # option to set cells with 1 read to 0 (used). To not filter, set to value 1
+threshold_otu_size <- 1 # option to set minimum OTU size. To not filter by OTU size, set to value 1
+set_one_read_cells_to <- 0 # option to set cells with 1 read to 0. To not filter by cell size, set to value 1
 
 minOTUsizefilter <- function(df){
     df <- df %>% select(-starts_with("PC"), -starts_with("xb")) # tidyverse
@@ -110,10 +99,6 @@ minOTUsizefilter <- function(df){
 }
 
 OTUminsize <- map(otu, minOTUsizefilter)
-
-# splminOTU <- minOTUsizefilter(spl$A1)
-# View(splminOTU)
-# rm(splminOTU)
 ```
 
 Manually check that all samples (rows) still have sufficient numbers of reads in them.  This isn't a risk with this dataset, but some datasets have samples with few, low-read-number OTUs. Removing small OTUs will sometimes produce samples (rows) that have almost no data, because that sample failed during PCR or DNA extraction. 
@@ -129,7 +114,7 @@ Hits, False-negatives, and False-positives, Tables 3 and S_1
 
 Combine echo OTUs and count the number of drop-ins and drop-outs.  
 
-Echoes are split OTUs (that failed to get merged by LULU). (i.e. 1 high and N moderately high pidents)
+Echoes are split OTUs. (i.e. 1 high pident and N moderately high pident OTUs)
 Drop-ins are OTUs that do not match any of the MTB refs (i.e. a pident <97% to all MTBs)
 Drop-outs are MTB seqs that were not matched by any OTU at >= 97% similarity
 
@@ -139,8 +124,9 @@ Import BLAST/vsearch tables. I am using the vsearch tables, but the BLAST result
 otutables <- "table_BioSoupII_\\w_Arthropoda.vsearchMTB.txt"
 begumfilter # confirm correct stringency level
 
-otu_files <- list.files(Sys.glob(file.path("..", "analysis", begumfilter)), pattern = otutables, full.names = TRUE)
-    # list.files is used to look for files matching "table_BioSoupII_97_lulu_Arthropoda_\\w.txt"
+otu_files <- list.files(Sys.glob(file.path("..", "analysis", begumfilter)), 
+                        pattern = otutables, full.names = TRUE)
+    # list.files is used to look for files matching "table_BioSoupII_97_Arthropoda_\\w.txt"
     # full.names = TRUE returns the pathnames
     # \\ is used to escape \ and . (because otherwise they are read with grep as "ignore" and "any character". R needs a second \)
 head(otu_files); cat("    ", length(otu_files), "total files")
@@ -153,9 +139,11 @@ length_threshold <- 250 # initial filtering, to be filtered more stringently lat
 # function to read_tsv the files
 readotutables <- function(x) {
     df <- read_tsv(x, na = "NA", col_names = mtbcolnames) %>% 
-        filter(pident >= pident_threshold & length > length_threshold)
+        filter(pident >= pident_threshold & length > length_threshold) %>% 
+        separate(col = qseqid, c("qseqid", "size"), sep = ";")
     df
 }
+
 
 blastmtb <- map(otu_files, readotutables) # note that this could contain either the blastn or vsearch results. I'm using the vsearch results
 
@@ -270,6 +258,26 @@ assign(paste("OTUBLAST_all", pident_threshold2, begumfilter, sep = "_"), bind_ro
 # e.g. OTUBLAST_all_97_Filter_min1PCRs_min1copies
 ```
 
+In order to run all 12 stringency values for Table S_1, I have provided them here. Select one level and then run the code above this chunk. For each one, a subtable will be created with object name format: OTUBLAST_all_97_Filter_min1PCRs_min1copies
+```{r begumfilter selection for Filter_min1_2PCRs, eval=FALSE}
+begumfilter <- "Filter_min1PCRs_min1copies"
+begumfilter <- "Filter_min1PCRs_min2copies"
+begumfilter <- "Filter_min1PCRs_min3copies"
+begumfilter <- "Filter_min1PCRs_min4copies"
+begumfilter <- "Filter_min2PCRs_min1copies"
+begumfilter <- "Filter_min2PCRs_min2copies"
+begumfilter <- "Filter_min2PCRs_min3copies"
+begumfilter <- "Filter_min2PCRs_min4copies" # Begumfilter stringency level under which most figures and analyses were run (except Table S_1, which presents all stringency levels)
+```
+
+The Filter_min3PCRs tables have a problem in that H1 is missing. So the hits and dropouts code is modified. Select each Filter level, run the code above EXCEPT for 'hits dropouts and dropins for Begumfilter with 1 or 2 PCRs' and then run 'hits dropouts and dropins for Begumfilter with 3 PCRs'
+```{r begumfilter selection for Filter_min3PCRs, eval=FALSE}
+begumfilter <- "Filter_min3PCRs_min1copies"
+begumfilter <- "Filter_min3PCRs_min2copies"
+begumfilter <- "Filter_min3PCRs_min3copies"
+begumfilter <- "Filter_min3PCRs_min4copies"
+```
+
 Filter_min3PCRs, Modified code because PCR H1 lacks hhhlbody
 ```{r hits dropouts and dropins for Begumfilter with 3 PCRs}
 pident_threshold2 <- 97 # min % similarity to be considered a match to an MTBseq
@@ -371,8 +379,7 @@ Table_DROPS_97 <- bind_rows(OTUBLAST_all_97_Filter_min1PCRs_min1copies,
     select(soup, begumfilter, metric, everything())
 
 # save Table S_1, from which Table 3 was created
-# fs::dir_create(file.path("..", "results"))
-# write.xlsx(Table_DROPS_97, file.path("..", "results", "Table_S_1.xlsx"), sheetName = "Table_S_1", row.names = FALSE)
+write.xlsx(Table_DROPS_97, file.path("..", "results", "Table_S_1.xlsx"), sheetName = "Table_S_1", row.names = FALSE)
 ```
 
 
