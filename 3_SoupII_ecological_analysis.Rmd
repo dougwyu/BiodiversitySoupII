@@ -14,6 +14,7 @@ library(car)
 # remotes::install_github("grunwaldlab/metacoder")
 library(metacoder)
 library(xlsx)
+library(ggeffects)
 
 # my general-use packages
 library(here)
@@ -88,7 +89,7 @@ names(otu) <- folderpoolvec
 Rotate OTU tables and and set 1-read cells to 0
 ```{r filter OTU tables for min OTU size and set 1-read cells to 0}
 threshold_otu_size <- 1 # option to set minimum OTU size. To not filter by OTU size, set to value 1
-set_one_read_cells_to <- 0 # option to set cells with 1 read to 0. To not filter by cell size, set to value 1
+set_one_read_cells_to <- 0 # option to set cells with just 1 read to 0. To not filter by cell size, set to value 1
 
 minOTUsizefilter <- function(df){
     df <- df %>% select(-starts_with("PC"), -starts_with("xb")) # tidyverse
@@ -98,12 +99,12 @@ minOTUsizefilter <- function(df){
     df
 }
 
-OTUminsize <- map(otu, minOTUsizefilter)
+OTUminsize <- map(otu, minOTUsizefilter) 
 ```
 
 Manually check that all samples (rows) still have sufficient numbers of reads in them.  This isn't a risk with this dataset, but some datasets have samples with few, low-read-number OTUs. Removing small OTUs will sometimes produce samples (rows) that have almost no data, because that sample failed during PCR or DNA extraction. 
 ```{r view rowsums, eval=FALSE}
-tablerowsums <- map_dfr(OTUminsize, rowSums)
+tablerowsums <- map_dfr(OTUminsize, rowSums) # output has samples in columns, PCRs in rows
 View(tablerowsums)
 ```
 
@@ -118,7 +119,7 @@ Echoes are split OTUs. (i.e. 1 high pident and N moderately high pident OTUs)
 Drop-ins are OTUs that do not match any of the MTB refs (i.e. a pident <97% to all MTBs)
 Drop-outs are MTB seqs that were not matched by any OTU at >= 97% similarity
 
-Import BLAST/vsearch tables. I am using the vsearch tables, but the BLAST results are the same. 
+Import BLAST/vsearch tables. I am using the vsearch tables; the BLAST results are similar 
 ```{r import blast vsearch tables}
 # otutables <- "table_BioSoupII_\\w_Arthropoda.blastnMTB.txt"
 otutables <- "table_BioSoupII_\\w_Arthropoda.vsearchMTB.txt"
@@ -264,6 +265,7 @@ begumfilter <- "Filter_min1PCRs_min1copies"
 begumfilter <- "Filter_min1PCRs_min2copies"
 begumfilter <- "Filter_min1PCRs_min3copies"
 begumfilter <- "Filter_min1PCRs_min4copies"
+
 begumfilter <- "Filter_min2PCRs_min1copies"
 begumfilter <- "Filter_min2PCRs_min2copies"
 begumfilter <- "Filter_min2PCRs_min3copies"
@@ -418,11 +420,11 @@ ordination <- function(x){
 ordinationplot <- function(x, y, z){
   xlim <- c(-1, 1) 
   ylim <- c(-0.75, 0.75) 
-  plot(x, ylab="", xlab="", xlim=xlim, ylim=ylim, type="n", main=y) 
+  plot(x, ylab="NMDS2", xlab="NMDS1", xlim=xlim, ylim=ylim, type="n", main=y) 
    
   points(x, display = "sites", pch=16, cex=(z$sprichness/40), col=colorvec)
   
-  with(z, legend("topright", legend = unique(bodypart), bty = "n", col=colorvec, pt.cex=2, pch=16, y.intersp = 1))
+  with(z, legend("top", legend = unique(bodypart), bty = "n", col=colorvec, pt.cex=2, pch=16, y.intersp = 1))
   
   cexnum <- 0.5
   
@@ -471,8 +473,7 @@ plottitle <- names(ordination_one)
 # plot ordination, with jmds names as plot titles
 pmap(list(ordination_one, plottitle, envs), ordinationplot)
 ```
-
-
+  
 ########################################################################
 Evenness analysis, Figure S_1
 ########################################################################
@@ -500,32 +501,34 @@ OTUBLAST_hits_t_all_long <- rotate_df(OTUBLAST_hits, rn = "soup", cn = TRUE) %>%
 # regression random-effects models, body and leg fit separately
 bodydf <- OTUBLAST_hits_t_all_long %>% filter(bodypart == "body")
 legdf <- OTUBLAST_hits_t_all_long %>% filter(bodypart == "leg")
-
+ 
 # bodydf
 mod1 <- lmer(OTU_hits ~ shannon + (1 | PCR), data = bodydf, REML = FALSE)
 mod2 <- lmer(OTU_hits ~ 1 + (1 | PCR), data = bodydf, REML = FALSE)
 anova(mod1, mod2)
 # P < 0.001
-mod1.final <- lmer(OTU_hits ~ shannon + (1 | PCR), data = bodydf, REML = TRUE)
-r.squaredGLMM(mod1.final) # MuMin package
-# R2m: 0.784
+mod1.body.final <- lmer(OTU_hits ~ shannon + (1 | PCR), data = bodydf, REML = TRUE)
+r.squaredGLMM(mod1.body.final) # MuMin package
+# R2m: 0.798
 
 # legdf
 mod1 <- lmer(OTU_hits ~ shannon + (1 | PCR), data = legdf, REML = FALSE)
 mod2 <- lmer(OTU_hits ~ 1 + (1 | PCR), data = legdf, REML = FALSE)
 anova(mod1, mod2)
-# P < 0.0001
-mod1.final <- lmer(OTU_hits ~ shannon + (1 | PCR), data = legdf, REML = TRUE)
-r.squaredGLMM(mod1.final) # MuMin package
-# R2m: 0.376
+mod1.leg.final <- lmer(OTU_hits ~ shannon + (1 | PCR), data = legdf, REML = TRUE)
+summary(mod1.leg.final) # PCR random effects variance = 0.0 (singularity)
+mod3 <- lm(OTU_hits ~ shannon, data = legdf)
+summary(mod3)
+#             Estimate Std. Error t value Pr(>|t|)    
+# (Intercept)  -100.16      49.58  -2.020 0.052370 .  
+# shannon        45.57      10.54   4.323 0.000156 ***
 
-# plot
-body <- OTUBLAST_hits_t_all_long %>% 
-    filter(bodypart == "body") %>% 
-    ggplot(. , aes(x = shannon, y = OTU_hits, group = PCR, colour = PCR)) +
+body <- 
+    ggplot(bodydf, aes(x = shannon, y = OTU_hits, group = PCR, colour = PCR)) +
     geom_point() +
     ylim(50, 250) +
-    geom_smooth(method = "lm", se = FALSE) +
+    geom_line(data = cbind(bodydf, pred = predict(mod1.body.final)), 
+              aes(y = pred), size = 1) +
     labs(x = "Evenness (Shannon diversity)", 
          y = "Number of OTUs matched to a Reference") +
     theme_cowplot() +
@@ -536,27 +539,74 @@ body <- OTUBLAST_hits_t_all_long %>%
     annotate("text", x = 4.65, y = 185, label = "Hhml") +
     annotate("text", x = 5.2, y = 130, label = "hhhl") +
     annotate("text", x = 5.3, y = 180, label = "mmmm") +
-    annotate("text", x = 4.6, y = 250, label = "paste(\"p<0.001, \", italic(marginal_R) ^ 2, \" = 78.4\")", parse = TRUE)
+    annotate("text", x = 4.6, y = 250, label = "paste(\"p<0.0001, \", italic(marginal_R) ^ 2, \" = 79.9\")", parse = TRUE)
 
-leg <- OTUBLAST_hits_t_all_long %>% 
-    filter(bodypart == "leg") %>% 
-    ggplot(. , aes(x = shannon, y = OTU_hits, group = PCR, colour = PCR)) +
+leg <- 
+    ggplot(legdf, aes(x = shannon, y = OTU_hits, group = PCR, colour = PCR)) +
     geom_point() +
     ylim(50, 250) +
-    geom_smooth(method = "lm", se = FALSE) +
+    geom_line(data = cbind(legdf, pred = predict(mod3)), 
+              aes(y = pred), size = 1) +
     labs(x = "Evenness (Shannon diversity)", 
          y = "Number of OTUs matched to a Reference") +
     theme_cowplot() +
     facet_wrap(~bodypart) +
-    scale_colour_viridis_d(option = "cividis") +
+    scale_colour_viridis_d(option = "cividis", direction = -1) +
     theme(axis.title.y = element_blank()) +
     annotate("text", x = 4.22, y = 70, label = "hlll") +
     annotate("text", x = 4.3, y = 120, label = "Hhml") +
     annotate("text", x = 5.1, y = 190, label = "hhhl") +
     annotate("text", x = 5.25, y = 100, label = "mmmm") +
-    annotate("text", x = 4.6, y = 250, label = "paste(\"p<0.001, \", italic(marginal_R) ^ 2, \" = 37.3\")", parse = TRUE)   
+    annotate("text", x = 4.6, y = 250, 
+             label = "paste(\"p<0.0001, \", italic(R) ^ 2, \" = 38.3\")", 
+             parse = TRUE)   
 
 body + leg
+
+# plots using geom_smooth(method = "lm")
+# body <- OTUBLAST_hits_t_all_long %>% 
+#     filter(bodypart == "body") %>% 
+#     ggplot(. , aes(x = shannon, y = OTU_hits, group = PCR, colour = PCR)) +
+#     geom_point() +
+#     ylim(50, 250) +
+#     geom_smooth(method = "lm", se = FALSE) +
+#     # geom_line(data = mod1bodypred, aes(x = x, y = predicted)) +
+#     # geom_ribbon(data = mod1bodypred, aes(x = x, ymin = conf.low, ymax = conf.high),
+#     #             alpha = 0.15, fill = "green") +
+#     labs(x = "Evenness (Shannon diversity)", 
+#          y = "Number of OTUs matched to a Reference") +
+#     theme_cowplot() +
+#     # facet_wrap(~bodypart) +
+#     scale_colour_viridis_d(option = "cividis") +
+#     theme(legend.position='none') +
+#     annotate("text", x = 4.2, y = 55, label = "hlll") +
+#     annotate("text", x = 4.65, y = 185, label = "Hhml") +
+#     annotate("text", x = 5.2, y = 130, label = "hhhl") +
+#     annotate("text", x = 5.3, y = 180, label = "mmmm") +
+#     annotate("text", x = 4.6, y = 250, label = "paste(\"p<0.001, \", italic(marginal_R) ^ 2, \" = 79.9\")", parse = TRUE)
+# 
+# leg <- OTUBLAST_hits_t_all_long %>% 
+#     filter(bodypart == "leg") %>% 
+#     ggplot(. , aes(x = shannon, y = OTU_hits, group = PCR, colour = PCR)) +
+#     geom_point() +
+#     ylim(50, 250) +
+#     geom_smooth(method = "lm", se = FALSE) +
+#     # geom_line(data = mod1legpred, aes(x = x, y = predicted)) +
+#     # geom_ribbon(data = mod1legpred, aes(x = x, ymin = conf.low, ymax = conf.high),
+#     #             alpha = 0.15, fill = "green") +
+#     labs(x = "Evenness (Shannon diversity)", 
+#          y = "Number of OTUs matched to a Reference") +
+#     theme_cowplot() +
+#     # facet_wrap(~bodypart) +
+#     scale_colour_viridis_d(option = "cividis") +
+#     theme(axis.title.y = element_blank()) +
+#     annotate("text", x = 4.22, y = 70, label = "hlll") +
+#     annotate("text", x = 4.3, y = 120, label = "Hhml") +
+#     annotate("text", x = 5.1, y = 190, label = "hhhl") +
+#     annotate("text", x = 5.25, y = 100, label = "mmmm") +
+#     annotate("text", x = 4.6, y = 250, label = "paste(\"p<0.001, \", italic(marginal_R) ^ 2, \" = 37.6\")", parse = TRUE)   
+# 
+# body + leg
 ```
 
 ########################################################################
@@ -570,15 +620,15 @@ MTB_quant <- function(OTUBLASTqpcr) {
     filter(!is.na(sseqid)) %>%  # remove drop-ins
     filter(pident >= pident_threshold2) %>% # remove drop-ins
     filter(!str_starts(sseqid, "P")) %>% # remove hits to positive ctrl
-    select(hlllleg, hlllbody, Hhmlleg, Hhmlbody, hhhlleg, hhhlbody, mmmmleg, mmmmbody,sseqid, starts_with("qPCR"), starts_with("Biotek")) %>% 
+    select(Hhmlbody, Hhmlleg, hhhlbody, hhhlleg, hlllbody, hlllleg, sseqid, starts_with("qPCR"), starts_with("Biotek")) %>% 
     group_by(sseqid) %>% # group by MTBseq
     summarise(
-        hlllleg_sum = sum(hlllleg), 
-        hlllbody_sum = sum(hlllbody), 
-        Hhmlleg_sum = sum(Hhmlleg), 
         Hhmlbody_sum = sum(Hhmlbody),
-        hhhlleg_sum = sum(hhhlleg), 
+        Hhmlleg_sum = sum(Hhmlleg), 
         hhhlbody_sum = sum(hhhlbody),
+        hhhlleg_sum = sum(hhhlleg), 
+        hlllbody_sum = sum(hlllbody), 
+        hlllleg_sum = sum(hlllleg), 
         qPCR_hlll_leg = first(qPCR_hlll_leg),
         Biotek_hlll_leg = first(Biotek_hlll_leg),
         qPCR_hhhl_leg = first(qPCR_hhhl_leg),
@@ -591,12 +641,46 @@ MTB_quant <- function(OTUBLASTqpcr) {
         Biotek_hhhl_body = first(Biotek_hhhl_body),
         qPCR_Hhml_body = first(qPCR_Hhml_body),
         Biotek_Hhml_body = first(Biotek_Hhml_body)
-        ) # sum reads per sseqid and take first sseqid input amts
-}
+        ) # sum reads per sseqid and take first sseqid input amts. 
+} # in practice, these sums have no effect because all sseqids are already unique
 
 OTUBLASTqpcrA <- MTB_quant(OTUBLASTqpcr$A)
 
-display.brewer.pal(7, "Set2")
+# correct for soup dilutions
+soupdil <- read_excel(here("..", "data", "MTB", "soup_dilutions.xlsx")) %>% arrange(Soup)
+# "Hhmlbody" "Hhmlleg" "hhhlbody" "hhhlleg"  "hlllbody" "hlllleg"  
+
+# "qPCR_hlll_leg"  
+# "Biotek_hlll_leg"  "qPCR_hhhl_leg"    "Biotek_hhhl_leg"  "qPCR_Hhml_leg"  
+# "Biotek_Hhml_leg"  "qPCR_hlll_body"   "Biotek_hlll_body" "qPCR_hhhl_body" 
+# "Biotek_hhhl_body" "qPCR_Hhml_body"   "Biotek_Hhml_body"
+
+OTUBLASTqpcrA <- OTUBLASTqpcrA %>% 
+    mutate(qPCR_hlll_leg = qPCR_hlll_leg / soupdil[soupdil$Soup == "hlllleg", ]$Dilution) %>% 
+    mutate(Biotek_hlll_leg = Biotek_hlll_leg / soupdil[soupdil$Soup == "hlllleg", ]$Dilution) %>% 
+    mutate(qPCR_hhhl_leg = qPCR_hhhl_leg / soupdil[soupdil$Soup == "hhhlleg", ]$Dilution) %>% 
+    mutate(Biotek_hhhl_leg = Biotek_hhhl_leg / soupdil[soupdil$Soup == "hhhlleg", ]$Dilution) %>% 
+    mutate(qPCR_Hhml_leg = qPCR_Hhml_leg / soupdil[soupdil$Soup == "Hhmlleg", ]$Dilution) %>% 
+    mutate(Biotek_Hhml_leg = Biotek_Hhml_leg / soupdil[soupdil$Soup == "Hhmlleg", ]$Dilution) %>% 
+    mutate(qPCR_hlll_body = qPCR_hlll_body / soupdil[soupdil$Soup == "hlllbody", ]$Dilution) %>% 
+    mutate(Biotek_hlll_body = Biotek_hlll_body / soupdil[soupdil$Soup == "hlllbody", ]$Dilution) %>% 
+    mutate(qPCR_hhhl_body = qPCR_hhhl_body / soupdil[soupdil$Soup == "hhhlbody", ]$Dilution) %>% 
+    mutate(Biotek_hhhl_body = Biotek_hhhl_body / soupdil[soupdil$Soup == "hhhlbody", ]$Dilution) %>% 
+    mutate(qPCR_Hhml_body = qPCR_Hhml_body / soupdil[soupdil$Soup == "Hhmlbody", ]$Dilution) %>% 
+    mutate(Biotek_Hhml_body = Biotek_Hhml_body / soupdil[soupdil$Soup == "Hhmlbody", ]$Dilution)
+
+# a different way to correct for soup dilutions, multiplying the read numbers by dilution factors
+# OTUBLASTqpcrA <- OTUBLASTqpcrA %>% 
+#     mutate(Hhmlbody_sum = Hhmlbody_sum * soupdil[soupdil$Soup == "Hhmlbody", ]$Dilution) %>% 
+#     mutate(Hhmlleg_sum = Hhmlleg_sum * soupdil[soupdil$Soup == "Hhmlleg", ]$Dilution) %>% 
+#     mutate(hhhlbody_sum = hhhlbody_sum * soupdil[soupdil$Soup == "hhhlbody", ]$Dilution) %>% 
+#     mutate(hhhlleg_sum = hhhlleg_sum * soupdil[soupdil$Soup == "hhhlleg", ]$Dilution) %>% 
+#     mutate(hlllbody_sum = hlllbody_sum * soupdil[soupdil$Soup == "hlllbody", ]$Dilution) %>% 
+#     mutate(hlllleg_sum = hlllleg_sum * soupdil[soupdil$Soup == "hlllleg", ]$Dilution)
+# 
+
+
+# display.brewer.pal(7, "Set2")
 (colorvec <- brewer.pal(4, "Set2"))
 # "#8DD3C7" "#BEBADA" "#FB8072"
 
@@ -612,9 +696,9 @@ p1 <- ggplot(OTUBLASTqpcrA) +
          y="COI amplicon concentration (ng/µl)",
          subtitle = "body") +
     easy_move_legend(to = "none") +
-    annotate("text", x = 1650, y =40, label = "hlll", color = colorvec[1]) +
-    annotate("text", x = 3000, y = 220, label = "Hhml", color = colorvec[2]) +
-    annotate("text", x = 1800, y = 60, label = "hhhl", color = colorvec[3]) +
+    annotate("text", x = 1350, y = 4.2, label = "hlll", color = colorvec[1]) +
+    annotate("text", x = 3000, y = 4.5, label = "Hhml", color = colorvec[2]) +
+    annotate("text", x = 1800, y = 1, label = "hhhl", color = colorvec[3]) +
     easy_x_axis_title_size(11) +
     easy_y_axis_title_size(11)
 
@@ -669,6 +753,157 @@ p4 <- ggplot(OTUBLASTqpcrA) +
 # p3 + p4
 
 (p1 + p2) / (p3 + p4)
+```
+
+linear models
+1. create long data subsets
+2. compare ggplots to confirm that pivot_longer code worked correctly
+3. run linear models
+```{r}
+qpcrbody <- OTUBLASTqpcrA %>% 
+    select(contains("body")) %>% 
+    select(!starts_with("Biotek")) %>% 
+    rename(Hhmlbody_reads = Hhmlbody_sum, 
+           hhhlbody_reads = hhhlbody_sum, 
+           hlllbody_reads = hlllbody_sum, 
+           hlllbody_qpcr = qPCR_hlll_body, 
+           hhhlbody_qpcr = qPCR_hhhl_body, 
+           Hhmlbody_qpcr = qPCR_Hhml_body
+           ) %>% 
+  pivot_longer(everything(),
+               names_to = c("soup", ".value"),
+               names_pattern = "(.+)_(.+)"
+               )
+
+qpcrleg <- OTUBLASTqpcrA %>% 
+    select(contains("leg")) %>% 
+    select(!starts_with("Biotek")) %>% 
+    rename(Hhmlleg_reads = Hhmlleg_sum, 
+           hhhlleg_reads = hhhlleg_sum, 
+           hlllleg_reads = hlllleg_sum, 
+           hlllleg_qpcr = qPCR_hlll_leg, 
+           hhhlleg_qpcr = qPCR_hhhl_leg, 
+           Hhmlleg_qpcr = qPCR_Hhml_leg
+           ) %>% 
+  pivot_longer(everything(),
+               names_to = c("soup", ".value"),
+               names_pattern = "(.+)_(.+)"
+               )
+
+gdnabody <- OTUBLASTqpcrA %>% 
+    select(contains("body")) %>% 
+    select(!starts_with("qPCR")) %>% 
+    rename(Hhmlbody_reads = Hhmlbody_sum, 
+           hhhlbody_reads = hhhlbody_sum, 
+           hlllbody_reads = hlllbody_sum, 
+           hlllbody_gdna = Biotek_hlll_body, 
+           hhhlbody_gdna = Biotek_hhhl_body, 
+           Hhmlbody_gdna = Biotek_Hhml_body
+           ) %>% 
+  pivot_longer(everything(),
+               names_to = c("soup", ".value"),
+               names_pattern = "(.+)_(.+)"
+               )
+
+gdnaleg <- OTUBLASTqpcrA %>% 
+    select(contains("leg")) %>% 
+    select(!starts_with("qPCR")) %>% 
+    rename(Hhmlleg_reads = Hhmlleg_sum, 
+           hhhlleg_reads = hhhlleg_sum, 
+           hlllleg_reads = hlllleg_sum, 
+           hlllleg_gdna = Biotek_hlll_leg, 
+           hhhlleg_gdna = Biotek_hhhl_leg, 
+           Hhmlleg_gdna = Biotek_Hhml_leg
+           ) %>% 
+  pivot_longer(everything(),
+               names_to = c("soup", ".value"),
+               names_pattern = "(.+)_(.+)"
+               )
+
+p5 <- ggplot(qpcrbody) +
+    geom_point(aes(x=reads, y=qpcr, group=soup, color=soup)) +
+    geom_smooth(aes(x=reads, y=qpcr, group=soup, color=soup), method="lm", se=FALSE) +
+    theme_cowplot() +
+    easy_labs(x = "OTU size (number of reads)", 
+         y = "COI amplicon concentration (ng/µl)",
+         subtitle = "body") +
+    easy_move_legend(to = "none") +
+    easy_x_axis_title_size(11) +
+    easy_y_axis_title_size(11)
+
+p1 + p5
+
+p6 <- ggplot(qpcrleg) +
+    geom_point(aes(x=reads, y=qpcr, group=soup, color=soup)) +
+    geom_smooth(aes(x=reads, y=qpcr, group=soup, color=soup), method="lm", se=FALSE) +
+    theme_cowplot() +
+    easy_labs(x = "OTU size (number of reads)", 
+         y = "COI amplicon concentration (ng/µl)",
+         subtitle = "leg") +
+    easy_move_legend(to = "none") +
+    easy_x_axis_title_size(11) +
+    easy_y_axis_title_size(11)
+
+p3 + p6
+
+p7 <- ggplot(gdnabody) +
+    geom_point(aes(x=reads, y=gdna, group=soup, color=soup)) +
+    geom_smooth(aes(x=reads, y=gdna, group=soup, color=soup), method="lm", se=FALSE) +
+    theme_cowplot() +
+    easy_labs(x = "OTU size (number of reads)", 
+         y = "genomic DNA input (ng/µl)",
+         subtitle = "body") +
+    easy_move_legend(to = "none") +
+    easy_x_axis_title_size(11) +
+    easy_y_axis_title_size(11)
+
+p2 + p7
+
+p8 <- ggplot(gdnaleg) +
+    geom_point(aes(x=reads, y=gdna, group=soup, color=soup)) +
+    geom_smooth(aes(x=reads, y=gdna, group=soup, color=soup), method="lm", se=FALSE) +
+    theme_cowplot() +
+    easy_labs(x = "OTU size (number of reads)", 
+         y = "genomic DNA input (ng/µl)",
+         subtitle = "leg") +
+    easy_move_legend(to = "none") +
+    easy_x_axis_title_size(11) +
+    easy_y_axis_title_size(11)
+
+p4 + p8
+
+modqpcrbody1 <- lm(qpcr ~ reads + soup + reads:soup, data = qpcrbody)
+modqpcrbody2 <- lm(qpcr ~ reads + soup, data = qpcrbody)
+anova(modqpcrbody1, modqpcrbody2)
+summary(modqpcrbody1)
+par(mfrow=c(2,2))
+plot(modqpcrbody1)
+par(mfrow=c(1,1))
+# performance::check_model(modqpcrbody1)
+
+modqpcrleg1 <- lm(qpcr ~ reads + soup + reads:soup, data = qpcrleg)
+modqpcrleg2 <- lm(qpcr ~ reads + soup, data = qpcrleg)
+anova(modqpcrleg1, modqpcrleg2)
+summary(modqpcrleg1)
+par(mfrow=c(2,2))
+plot(modqpcrleg1)
+par(mfrow=c(1,1))
+
+modgdnaleg1 <- lm(gdna ~ reads + soup + reads:soup, data = gdnaleg)
+modgdnaleg2 <- lm(gdna ~ reads + soup, data = gdnaleg)
+anova(modgdnaleg1, modgdnaleg2)
+summary(modgdnaleg1)
+par(mfrow=c(2,2))
+plot(modgdnaleg1)
+par(mfrow=c(1,1))
+
+modgdnabody1 <- lm(gdna ~ reads + soup + reads:soup, data = gdnabody)
+modgdnabody2 <- lm(gdna ~ reads + soup, data = gdnabody)
+anova(modgdnabody1, modgdnabody2)
+summary(modgdnabody1)
+par(mfrow=c(2,2))
+plot(modgdnabody1)
+par(mfrow=c(1,1))
 ```
 
 

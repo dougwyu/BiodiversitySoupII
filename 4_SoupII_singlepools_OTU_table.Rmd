@@ -122,7 +122,7 @@ splminOTU <- map(spl, minOTUsizefilter)
 ```
 
 Check that all samples (rows) still have sufficient numbers of reads in them.  This isn't a risk with this dataset, but some datasets have samples with few, low-read-number OTUs. Removing small OTUs will sometimes produce samples (rows) that have almost no data, because that sample failed during PCR or DNA extraction. 
-```{r}
+```{r, eval=FALSE}
 tablerowsums <- map_dfr(splminOTU, rowSums)
 View(tablerowsums)
 ```
