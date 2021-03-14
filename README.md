@@ -5,7 +5,7 @@ See Wiki page for required folder structure.
 This folder contains all the files created after the BioSoupII pipeline has finished creating OTU tables and assigning taxonomies. If you want to run the pipeline from scratch, remove the following folders. The remaining files are the information files that DAMe/Begum uses to run the sorting and filtering and the reference files for blasting.
 ```
 cd BiodiversitySoupII_repo/  
-# there should be three folders:  analysis/, data/, and scripts/
+# there should be four folders:  analysis/, data/, results/, and scripts/
 rm -rf analysis/Filter_min1PCRs_min1copies/  
 rm -rf analysis/Filter_min2PCRs_min4copies/  
 rm -rf analysis/Filter_min3PCRs_min3copies/  
