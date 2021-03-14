@@ -417,6 +417,7 @@ ordination <- function(x){
     df <- metaMDS(x, distance = "bray", trymax = 40, binary=FALSE)
     df
 }
+# ordinationplot(ordinations, plottitle, envs)
 ordinationplot <- function(x, y, z){
   xlim <- c(-1, 1) 
   ylim <- c(-0.75, 0.75) 
