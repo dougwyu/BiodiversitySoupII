@@ -516,9 +516,14 @@ r.squaredGLMM(mod1.body.final) # MuMin package
 mod1 <- lmer(OTU_hits ~ shannon + (1 | PCR), data = legdf, REML = FALSE)
 mod2 <- lmer(OTU_hits ~ 1 + (1 | PCR), data = legdf, REML = FALSE)
 anova(mod1, mod2)
+AIC(mod1, mod2)
 mod1.leg.final <- lmer(OTU_hits ~ shannon + (1 | PCR), data = legdf, REML = TRUE)
 summary(mod1.leg.final) # PCR random effects variance = 0.0 (singularity)
 mod3 <- lm(OTU_hits ~ shannon, data = legdf)
+AIC(mod1, mod3)
+#      df      AIC
+# mod1  4 315.9662
+# mod3  3 313.9662
 summary(mod3)
 #             Estimate Std. Error t value Pr(>|t|)    
 # (Intercept)  -100.16      49.58  -2.020 0.052370 .  
