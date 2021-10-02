@@ -30,8 +30,8 @@ brew install gnu-sed # (gsed == GNU version of sed == Linux version of sed)
 brew install grep # gnu-grep
 brew install gawk # gnu-awk
 brew install parallel # GNU parallel
-brew install brewsci/bio/seqkit # https://github.com/shenwei356/seqkit
-brew install brewsci/bio/vsearch # https://github.com/torognes/vsearch
+brew install seqkit # https://github.com/shenwei356/seqkit
+brew install vsearch # https://github.com/torognes/vsearch
 brew install seqtk # https://github.com/lh3/seqtk
 brew install fastp # http://github.com/OpenGene/fastp
 brew install python@2 # python2
